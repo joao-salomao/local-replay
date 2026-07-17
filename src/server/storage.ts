@@ -85,7 +85,7 @@ export class Storage {
     const cutoff = dateFolder(nowMs - retentionDays * 86_400_000);
     const deleted: string[] = [];
     for (const day of safeReaddir(this.clipsDir())) {
-      if (day < cutoff) {
+      if (/^\d{4}-\d{2}-\d{2}$/.test(day) && day < cutoff) {
         rmSync(join(this.clipsDir(), day), { recursive: true, force: true });
         deleted.push(day);
       }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { existsSync, mkdtempSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Storage, type ClipMeta } from "../../src/server/storage";
@@ -55,6 +55,18 @@ describe("Storage", () => {
     expect(deleted).toEqual(["2026-07-07"]);
     expect(s.listClips().length).toBe(0); // clip-002 has no meta yet, but its dir remains
     expect(existsSync(join(s.clipsDir(), "2026-07-17"))).toBe(true);
+  });
+
+  it("retention ignores entries that are not date folders", () => {
+    const s = new Storage(tmp());
+    const now = Date.parse("2026-07-17T12:00:00Z");
+    s.createClipDir(1, now - 10 * 86_400_000);
+    writeFileSync(join(s.clipsDir(), ".DS_Store"), "junk");
+    mkdirSync(join(s.clipsDir(), "aaa-not-a-date"), { recursive: true });
+    const deleted = s.cleanupRetention(7, now);
+    expect(deleted).toEqual(["2026-07-07"]);
+    expect(existsSync(join(s.clipsDir(), ".DS_Store"))).toBe(true);
+    expect(existsSync(join(s.clipsDir(), "aaa-not-a-date"))).toBe(true);
   });
 
   it("reports free disk space as a number", () => {
