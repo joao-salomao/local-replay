@@ -63,7 +63,7 @@ Multi-quadra, contas de usuário individuais, upload para nuvem, integração Wh
 1. **`/` (entrada):** pede a senha, cria sessão, oferece os papéis: **"Ser câmera"** e **"Controlar gravação"**, mais link para a galeria.
 2. **`/camera`:** transforma o celular em câmera fixa (tripé): preview, buffer rolante, aguarda sinal GRAVAR via WebSocket. Mostra status (conectado / bufferizando / enviando). A pessoa nomeia o ângulo ("Fundo", "Lateral rede"...) — persiste em `localStorage`.
 3. **`/control`:** botão GRAVAR gigante + seletor de duração do clipe (10/20/30/45/60s) + lista de câmeras online + status do último lance (capturando → processando → pronto) + QR code de entrada no sistema.
-4. **`/clips`:** galeria dos clipes (mais recente primeiro), player, download, QR code por clipe.
+4. **`/clips`:** galeria dos clipes (mais recente primeiro), player, download, botão **Compartilhar** (share sheet nativo via Web Share API, com fallback para download) e QR code por clipe apontando para o arquivo do vídeo.
 
 ### Fluxo de um lance (fim a fim)
 
@@ -86,7 +86,7 @@ Multi-quadra, contas de usuário individuais, upload para nuvem, integração Wh
 
 **Ao receber `RECORD(jobId, T, windowSec)`:** a página **para o gravador atual** (finaliza o arquivo de forma limpa em todas as plataformas — mais confiável que `requestData()`) e já inicia o próximo ciclo; seleciona os arquivos que cobrem `[T − janela, T]`; sobe via `POST /api/clips/:jobId/upload` (multipart) com metadados: nome do ângulo, horário de início de cada arquivo (em relógio do servidor), mimetype/codec. Retry de upload: 3 tentativas com backoff. O gap do reinício fica **depois** de `T`, fora do clipe.
 
-**Tela sempre acesa.** Wake Lock API impede o descanso de tela. Instrução de operação: celular no tripé, **na tomada**, página em primeiro plano. Em `visibilitychange` (aba escondida), a página marca-se degradada; ao voltar, alerta e reinicia o buffer. O hub marca a câmera offline se o heartbeat parar.
+**Tela sempre acesa.** Wake Lock API impede o descanso de tela. Instrução de operação: celular no tripé, **na tomada**, página em primeiro plano. Em `visibilitychange` (aba escondida), a página marca-se degradada; ao voltar, alerta e reinicia o buffer — e, se o iOS tiver derrubado o stream em segundo plano (track `ended`/`muted`), **readquire a câmera automaticamente** com novo `getUserMedia`. O hub marca a câmera offline se o heartbeat parar.
 
 **Relógio sincronizado.** No connect do WebSocket, handshake NTP simplificado (3 pings → offset mediano; precisão típica <100ms em LAN). Re-sync a cada reconexão e a cada 5 min. Todo arquivo do buffer é etiquetado com horário **do servidor**. Precisão de alinhamento entre ângulos: ±100–200ms (suficiente para replay; alinhamento frame-accurate está fora de escopo).
 
@@ -157,6 +157,18 @@ A galeria lista lendo o diretório. Volume Docker mapeia `data/` para uma pasta 
 2. Ajustar a duração no `/control` vale para o lance seguinte.
 3. Uma câmera cai → lance sai com o ângulo restante; a câmera reconecta sozinha ao voltar.
 4. Sistema opera sem internet (rede local pura) após o build da imagem.
+
+## Especificidades iOS e Android
+
+Pisos de compatibilidade: **iOS Safari ≥ 16.4** (Wake Lock + MediaRecorder MP4/H.264) e **Android Chrome ≥ 96** (WebM). Recomendação operacional: Safari no iPhone, Chrome no Android.
+
+- **60fps é melhor esforço no navegador:** muitos aparelhos (inclusive iPhones) entregam 30fps via `getUserMedia` mesmo com constraint `ideal: 60`; a página `/camera` mostra resolução/fps reais e a UI avisa que varia por aparelho. A saída final é sempre conformada para 1080p60.
+- **iOS mata o stream em segundo plano:** ao voltar à página, além de reiniciar o ciclo, detectar track `ended`/`muted` e readquirir a câmera com novo `getUserMedia` antes de retomar o buffer.
+- **Certificado autoassinado:** no Android Chrome basta "Avançado → Continuar" (o `wss://` funciona em seguida); no iOS o aviso pode não valer para o WebSocket — o servidor expõe **`GET /cert` (rota pública)** para baixar o certificado e instalar como perfil (Ajustes → Geral → VPN e Gerenciamento de Dispositivo → instalar; depois Ajustes → Geral → Sobre → Confiança de Certificado → ativar). A página de login traz esse passo a passo. O certificado inclui o IP no SAN e é **regenerado automaticamente quando o IP da rede muda**.
+- **Formatos de gravação:** iPhone envia MP4 (H.264/AAC); Android envia WebM (VP8/VP9/H.264). O servidor aceita ambos; a saída é sempre MP4 H.264/AAC — reproduzível em qualquer aparelho (iPhone não toca WebM). No Safari, o `timeslice` do MediaRecorder pode entregar poucos eventos `dataavailable` — inofensivo, pois só o blob finalizado no `stop()` é usado.
+- **Seletor de lente/câmera:** aparelhos com várias câmeras traseiras (ex.: ultrawide, ótima para enquadrar a quadra inteira) ganham um seletor via `enumerateDevices` na página `/camera`; trocar de lente readquire o stream e reinicia o buffer.
+- **Orientação:** a página sugere usar o celular na horizontal ("↔️ Vire o celular para a horizontal" quando em retrato); vídeos verticais saem com pillarbox na saída 1920×1080.
+- **Operação na quadra:** celulares na tomada, à sombra, com economia de bateria desligada — calor prolongado derruba fps/qualidade em ambos os sistemas.
 
 ## Convenções de código
 

@@ -16,6 +16,7 @@
 - Constants (single source of truth where defined): clip duration default 20s, options `[10,20,30,45,60]`, max 60s; buffer cycle = `max(30, clipDuration)`s; trigger cooldown 2000ms; upload timeout 30000ms; camera offline after 10000ms without heartbeat, heartbeat sent every 3000ms (spec text says "heartbeat 5s" — we implement 3s send / 10s offline threshold, same intent, stricter detection); session TTL 24h; login rate limit 5/min per IP; low-disk warning < 5 GB; cert validity 3650 days; ports HTTPS 8443 / HTTP-redirect 8080; env vars `DATA_DIR`, `HTTPS_PORT`, `HTTP_PORT`, `HOST_LAN_IP`.
 - TDD: every logic module gets a failing test first. Conventional commits in English. Run `bun test` before every commit.
 - YAGNI: no DB, no user accounts, no cloud, no live streaming, no sponsor overlays.
+- Platform floors: iOS Safari ≥ 16.4, Android Chrome ≥ 96. 60fps capture is best-effort (`ideal` constraint — many phones deliver 30fps in the browser; the camera page surfaces actual fps). All outputs are MP4 H.264/AAC (iPhones cannot play WebM). iOS kills camera streams in background → pages must re-acquire, not just restart. Self-signed cert: Android proceeds via browser warning; iOS users install the cert from public route `GET /cert` (login page explains).
 
 ---
 
@@ -1780,7 +1781,7 @@ git commit -m "feat: serial processing queue and clip job coordinator"
 
 **Interfaces:**
 - Consumes: nothing.
-- Produces: `ensureCert(dataDir: string): Promise<{ certPath: string; keyPath: string }>` (idempotent; uses `openssl`, honors `HOST_LAN_IP` for SAN); `buildPages(webDir: string, outDir: string): Promise<PageAssets>`; `type PageAssets = { html(page: "login" | "camera" | "control" | "clips"): string; assetFile(name: string): string | null }` — `assetFile` returns an absolute path only for the whitelisted names `login.js`, `camera.js`, `control.js`, `clips.js`, `app.css`.
+- Produces: `ensureCert(dataDir: string): Promise<{ certPath: string; keyPath: string }>` (idempotent; uses `openssl`; `HOST_LAN_IP` goes into the SAN and is remembered in `<dataDir>/certs/san-ip` — when it changes, cert+key are regenerated so iPhones/Androids validate the right IP); `buildPages(webDir: string, outDir: string): Promise<PageAssets>`; `type PageAssets = { html(page: "login" | "camera" | "control" | "clips"): string; assetFile(name: string): string | null }` — `assetFile` returns an absolute path only for the whitelisted names `login.js`, `camera.js`, `control.js`, `clips.js`, `app.css`.
 - Placeholder page files created here are one-line stubs (real content comes in Tasks 12–15): each `index.html` is `<!doctype html><title>stub</title><script type="module" src="/assets/<name>.js"></script>` and each `.ts` is `console.log("<name> stub");`. `app.css` starts empty.
 
 - [ ] **Step 1: Write the failing tests**
@@ -1803,6 +1804,20 @@ describe("ensureCert", () => {
     const second = await ensureCert(dir);
     expect(second.certPath).toBe(first.certPath);
     expect(statSync(second.certPath).mtimeMs).toBe(mtime);
+  }, 30_000);
+
+  it("regenerates cert+key when HOST_LAN_IP changes", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "replay-cert-"));
+    process.env.HOST_LAN_IP = "192.168.0.10";
+    const first = await ensureCert(dir);
+    const before = readFileSync(first.certPath, "utf8");
+    process.env.HOST_LAN_IP = "192.168.0.20";
+    const second = await ensureCert(dir);
+    expect(readFileSync(second.certPath, "utf8")).not.toBe(before);
+    process.env.HOST_LAN_IP = "192.168.0.20";
+    const third = await ensureCert(dir);
+    expect(readFileSync(third.certPath, "utf8")).toBe(readFileSync(second.certPath, "utf8"));
+    delete process.env.HOST_LAN_IP;
   }, 30_000);
 });
 ```
@@ -1854,7 +1869,7 @@ printf 'console.log("clips stub");\n' > src/web/clips/clips.ts
 
 `src/server/cert.ts`:
 ```ts
-import { existsSync, mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 export async function ensureCert(dataDir: string): Promise<{ certPath: string; keyPath: string }> {
@@ -1862,9 +1877,15 @@ export async function ensureCert(dataDir: string): Promise<{ certPath: string; k
   mkdirSync(dir, { recursive: true });
   const certPath = join(dir, "cert.pem");
   const keyPath = join(dir, "key.pem");
+  const ipMarker = join(dir, "san-ip");
+  const wantedIp = process.env.HOST_LAN_IP ?? "";
+  const markedIp = existsSync(ipMarker) ? readFileSync(ipMarker, "utf8") : "";
+  if (wantedIp && markedIp !== wantedIp) {
+    rmSync(certPath, { force: true }); // IP changed: SAN must match for iOS/Android trust
+    rmSync(keyPath, { force: true });
+  }
   if (!existsSync(certPath) || !existsSync(keyPath)) {
-    const ip = process.env.HOST_LAN_IP;
-    const san = ip ? `subjectAltName=DNS:replay.local,IP:${ip}` : "subjectAltName=DNS:replay.local";
+    const san = wantedIp ? `subjectAltName=DNS:replay.local,IP:${wantedIp}` : "subjectAltName=DNS:replay.local";
     const proc = Bun.spawn(
       [
         "openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes",
@@ -1876,6 +1897,7 @@ export async function ensureCert(dataDir: string): Promise<{ certPath: string; k
     if ((await proc.exited) !== 0) {
       throw new Error(`openssl failed: ${await new Response(proc.stderr).text()}`);
     }
+    writeFileSync(ipMarker, wantedIp);
   }
   return { certPath, keyPath };
 }
@@ -1948,6 +1970,7 @@ git commit -m "feat: self-signed cert generation and web page bundling"
 - Routes (all JSON errors as `{ error: string }`):
   - `GET /` → login html (public). `GET /camera|/control|/clips` → html if session valid, else 302 `/`.
   - `GET /assets/:name` → whitelisted bundle/css (public).
+  - `GET /cert` → the self-signed certificate `<dataDir>/certs/cert.pem` as a download (public — needed BEFORE trust exists, for manual install on iOS).
   - `POST /api/login` `{password}` → rate-limited 5/min/IP; 200 + `Set-Cookie` or 401/429.
   - `GET /ws` → 401 without session; otherwise upgrade.
   - `POST /api/record` → `{jobId}` | 429 cooldown | 409 no-cameras.
@@ -1963,16 +1986,18 @@ git commit -m "feat: self-signed cert generation and web page bundling"
 `tests/integration/routes.test.ts`:
 ```ts
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createAppForTest } from "./test-app";
 
 let base: string;
+let dataDirRef: string;
 let stop: () => void;
 
 beforeAll(async () => {
   const dataDir = mkdtempSync(join(tmpdir(), "replay-routes-"));
+  dataDirRef = dataDir;
   writeFileSync(join(dataDir, "config.json"), JSON.stringify({ password: "senha-teste" }));
   const app = await createAppForTest(dataDir);
   base = app.base;
@@ -2030,6 +2055,15 @@ describe("routes", () => {
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toContain("svg");
     expect(await res.text()).toContain("<svg");
+  });
+
+  it("serves the certificate publicly for manual install (iOS)", async () => {
+    mkdirSync(join(dataDirRef, "certs"), { recursive: true });
+    writeFileSync(join(dataDirRef, "certs", "cert.pem"), "FAKE PEM");
+    const res = await fetch(`${base}/cert`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-disposition")).toContain("replay-local.crt");
+    expect(await res.text()).toBe("FAKE PEM");
   });
 });
 ```
@@ -2151,6 +2185,16 @@ export function createApp(ctx: AppContext): {
         if (!file) return json({ error: "not found" }, 404);
         const type = file.endsWith(".css") ? "text/css" : "application/javascript";
         return new Response(Bun.file(file), { headers: { "content-type": type } });
+      }
+      if (path === "/cert") {
+        const certPath = join(ctx.dataDir, "certs", "cert.pem");
+        if (!existsSync(certPath)) return json({ error: "not found" }, 404);
+        return new Response(Bun.file(certPath), {
+          headers: {
+            "content-type": "application/x-x509-ca-cert",
+            "content-disposition": 'attachment; filename="replay-local.crt"',
+          },
+        });
       }
       if (path === "/ws") {
         if (!authed) return json({ error: "unauthorized" }, 401);
@@ -2358,7 +2402,7 @@ git commit -m "feat: http router, upload endpoint and tls server bootstrap"
 - Consumes: `computeOffset` (Task 2), protocol types (Task 2), routes (Task 11).
 - Produces (api): `api<T>(path: string, init?: RequestInit): Promise<T>` (same-origin fetch, JSON, throws `Error(error)` on non-2xx); `isLoggedIn(): Promise<boolean>` (probes `/api/state`).
 - Produces (ws-client): `class WsClient { onMessage: (msg: ServerMessage) => void; onStatus: (connected: boolean) => void; connect(): void; send(msg: ClientMessage): void; serverNow(): number }` — auto-reconnect (1.5s), clock re-sync on every connect and every 5 min, heartbeat `{type:"hb"}` every 3s.
-- UI copy (exact): title "Replay Local"; password placeholder "Senha"; button "Entrar"; role buttons "📷 Ser câmera", "🔴 Controlar gravação", "🎬 Ver lances"; wrong password shows the server's `senha incorreta`.
+- UI copy (exact): title "Replay Local"; password placeholder "Senha"; button "Entrar"; role buttons "📷 Ser câmera", "🔴 Controlar gravação", "🎬 Ver lances"; wrong password shows the server's `senha incorreta`; collapsible help "Problemas para conectar no iPhone?" with the `/cert` install steps (text in the html below).
 
 - [ ] **Step 1: Implement shared api client**
 
@@ -2496,6 +2540,16 @@ a.dl { color: #58a6ff; margin-right: 12px; text-decoration: none; }
     <div style="height:8px"></div>
     <button id="go-clips" style="background:#1f6feb">🎬 Ver lances</button>
   </div>
+  <details class="card">
+    <summary class="muted">Problemas para conectar no iPhone?</summary>
+    <p class="muted" style="margin-top:8px">
+      No iPhone, o aviso de segurança pode não bastar para a conexão em tempo real.
+      1) Baixe o <a href="/cert" style="color:#58a6ff">certificado</a>.
+      2) Instale em Ajustes → Geral → VPN e Gerenciamento de Dispositivo.
+      3) Ative em Ajustes → Geral → Sobre → Confiança de Certificado.
+      No Android, basta tocar em "Avançado → Continuar" no aviso do navegador.
+    </p>
+  </details>
   <script type="module" src="/assets/login.js"></script>
 </body>
 </html>
@@ -2554,7 +2608,8 @@ git commit -m "feat: shared web client, stylesheet and login page"
 **Interfaces:**
 - Consumes: `WsClient` (Task 12), `selectFilesForWindow`, `cycleSeconds` (Task 3), protocol types (Task 2), upload route (Task 11).
 - Produces: browser-only page; no exports. Verified by Playwright in Task 17.
-- Behavior contract: request rear camera 1080p60 (`ideal` constraints, `audio: true`; on audio failure retry video-only); pick the first supported `MediaRecorder` mime from `["video/mp4;codecs=avc1","video/webm;codecs=h264,opus","video/webm;codecs=vp8,opus","video/webm","video/mp4"]`; bitrate 12 Mbps when actual fps ≥ 50 else 6 Mbps; rolling buffer = previous finalized file + current recorder (cycle = `cycleSeconds(clipDurationSeconds, 30)`, restarted when the server pushes a new duration); on `record` message stop the current recorder (clean finalize), immediately start the next cycle, then upload the files overlapping `[t − windowSec·1000, t]` with 3 retries (1s/2s/4s backoff); wake lock requested and re-acquired on visibility, with a red banner after any hidden period; angle name persisted in `localStorage["angleName"]`.
+- Behavior contract: request rear camera 1080p60 (`ideal` constraints, `audio: true`; on audio failure retry video-only); pick the first supported `MediaRecorder` mime from `["video/mp4;codecs=avc1","video/webm;codecs=h264,opus","video/webm;codecs=vp8,opus","video/webm","video/mp4"]` (iPhone lands on MP4/H.264, Android on WebM); bitrate 12 Mbps when actual fps ≥ 50 else 6 Mbps; rolling buffer = previous finalized file + current recorder (cycle = `cycleSeconds(clipDurationSeconds, 30)`, restarted when the server pushes a new duration); on `record` message stop the current recorder (clean finalize), immediately start the next cycle, then upload the files overlapping `[t − windowSec·1000, t]` with 3 retries (1s/2s/4s backoff); wake lock requested and re-acquired on visibility, with a red banner after any hidden period; angle name persisted in `localStorage["angleName"]`.
+- Platform contract (iOS/Android): iOS kills the camera stream in background — on return (or on `track.onended`) the page runs `recoverStream()`: detach old recorder handlers, stop tracks, fresh `getUserMedia`, restart cycle. Multi-lens phones get a camera selector (`enumerateDevices`; switching lens = `recoverStream()` with `deviceId: {exact}` — ultrawide is great for framing the whole court). A hint "↔️ Vire o celular para a horizontal" shows while in portrait. The fps readout appends "(60fps é melhor esforço — varia por aparelho)" because many phones cap browser capture at 30fps. Safari may fire few `dataavailable` events with timeslice — harmless: only the finalized blob at `onstop` is used.
 - UI copy (exact): name placeholder "Nome do ângulo (ex: Fundo)"; start button "Iniciar câmera"; status lines "Conectado"/"Desconectado", "Bufferizando últimos {N}s", "Enviando lance..."; banner "⚠️ A tela ficou oculta — buffer reiniciado. Mantenha esta página aberta e o celular na tomada."
 
 - [ ] **Step 1: Implement the html**
@@ -2580,6 +2635,8 @@ git commit -m "feat: shared web client, stylesheet and login page"
   </div>
   <div class="card" id="live" hidden>
     <video id="preview" autoplay muted playsinline></video>
+    <p class="muted" id="orient-hint" hidden>↔️ Vire o celular para a horizontal</p>
+    <select id="camera-select" hidden></select>
     <p class="row"><span class="status-dot" id="conn-dot"></span><span id="conn-text">Desconectado</span></p>
     <p class="muted" id="media-info"></p>
     <p id="buffer-status" class="muted"></p>
@@ -2621,10 +2678,11 @@ let cycleTimer = 0;
 let pendingRecord: { jobId: string; t: number; windowSec: number } | null = null;
 let wakeLock: { release(): Promise<void> } | null = null;
 let wasHidden = false;
+let currentDeviceId: string | null = null;
 
-async function acquireMedia(): Promise<MediaStream> {
+async function acquireMedia(deviceId: string | null): Promise<MediaStream> {
   const video = {
-    facingMode: { ideal: "environment" },
+    ...(deviceId ? { deviceId: { exact: deviceId } } : { facingMode: { ideal: "environment" } }),
     width: { ideal: 1920 },
     height: { ideal: 1080 },
     frameRate: { ideal: 60 },
@@ -2634,6 +2692,50 @@ async function acquireMedia(): Promise<MediaStream> {
   } catch {
     return await navigator.mediaDevices.getUserMedia({ video, audio: false });
   }
+}
+
+function reportStatus(): void {
+  const s = stream.getVideoTracks()[0]!.getSettings();
+  ws.send({ type: "cameraStatus", width: s.width ?? 0, height: s.height ?? 0, fps: Math.round(s.frameRate ?? 0) });
+  $("media-info").textContent = `${s.width}×${s.height} @ ${Math.round(s.frameRate ?? 0)}fps (60fps é melhor esforço — varia por aparelho)`;
+}
+
+function watchTrack(): void {
+  stream.getVideoTracks()[0]!.onended = () => void recoverStream();
+}
+
+/** iOS Safari kills the stream when backgrounded or on lens switch; recover with a fresh getUserMedia. */
+async function recoverStream(): Promise<void> {
+  if (recorder) {
+    recorder.ondataavailable = null;
+    recorder.onstop = null; // detach so the dead recorder cannot restart a cycle on the old stream
+    try {
+      if (recorder.state === "recording") recorder.stop();
+    } catch { /* already dead */ }
+    recorder = null;
+  }
+  clearTimeout(cycleTimer);
+  files = [];
+  stream.getTracks().forEach((t) => t.stop());
+  stream = await acquireMedia(currentDeviceId);
+  $<HTMLVideoElement>("preview").srcObject = stream;
+  watchTrack();
+  reportStatus();
+  startCycle();
+}
+
+async function populateCameraSelect(): Promise<void> {
+  const cams = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === "videoinput");
+  if (cams.length < 2) return;
+  const select = $<HTMLSelectElement>("camera-select");
+  select.hidden = false;
+  select.innerHTML = cams.map((c, i) => `<option value="${c.deviceId}">${c.label || `Câmera ${i + 1}`}</option>`).join("");
+  const active = stream.getVideoTracks()[0]!.getSettings().deviceId;
+  if (active) select.value = active;
+  select.onchange = () => {
+    currentDeviceId = select.value;
+    void recoverStream();
+  };
 }
 
 function startCycle(): void {
@@ -2692,9 +2794,7 @@ async function uploadClip(record: { jobId: string; t: number; windowSec: number 
 function handleMessage(msg: ServerMessage): void {
   if (msg.type === "registered") {
     cameraId = msg.cameraId;
-    const s = stream.getVideoTracks()[0]!.getSettings();
-    ws.send({ type: "cameraStatus", width: s.width ?? 0, height: s.height ?? 0, fps: Math.round(s.frameRate ?? 0) });
-    $("media-info").textContent = `${s.width}×${s.height} @ ${Math.round(s.frameRate ?? 0)}fps`;
+    reportStatus();
   }
   if (msg.type === "state") {
     if (msg.clipDurationSeconds !== clipDurationSeconds) {
@@ -2720,12 +2820,18 @@ async function keepAwake(): Promise<void> {
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) {
     wasHidden = true;
-  } else if (wasHidden && stream) {
-    $("hidden-banner").hidden = false;
+    return;
+  }
+  if (!wasHidden || !stream) return;
+  $("hidden-banner").hidden = false;
+  void keepAwake();
+  const track = stream.getVideoTracks()[0];
+  if (!track || track.readyState === "ended" || track.muted) {
+    void recoverStream(); // iOS dropped the stream while hidden
+  } else {
     files = [];
     if (recorder?.state === "recording") recorder.stop();
     else startCycle();
-    void keepAwake();
   }
 });
 
@@ -2737,7 +2843,7 @@ $("start").onclick = async () => {
   }
   localStorage.setItem("angleName", name);
   try {
-    stream = await acquireMedia();
+    stream = await acquireMedia(null);
   } catch (e) {
     $("camera-error").textContent = `Sem acesso à câmera: ${e instanceof Error ? e.message : e}`;
     return;
@@ -2759,6 +2865,13 @@ $("start").onclick = async () => {
   };
   ws.onMessage = handleMessage;
   ws.connect();
+
+  watchTrack();
+  void populateCameraSelect();
+  const portrait = window.matchMedia("(orientation: portrait)");
+  const updateOrientHint = () => ($("orient-hint").hidden = !portrait.matches);
+  portrait.addEventListener("change", updateOrientHint);
+  updateOrientHint();
 };
 
 $<HTMLInputElement>("angle-name").value = localStorage.getItem("angleName") ?? "";
@@ -2929,7 +3042,8 @@ git commit -m "feat: control page with record button, duration selector and stat
 **Interfaces:**
 - Consumes: `api` (Task 12), `/api/clips`, `/api/state`, `/files/clips/...`, `/api/qr.svg` (Task 11), `ClipMeta & { dir }` shape (Task 4).
 - Produces: browser-only page. Verified by Playwright in Task 17.
-- UI copy (exact): heading "🎬 Lances"; empty state "Nenhum lance ainda. Aperte GRAVAR no controle!"; per-card title "Lance #{n} — {HH:mm}"; download links "⬇️ Combinado" and "⬇️ {angle name}"; disk banner "⚠️ Pouco espaço em disco ({n} GB livres)" when `freeDiskGB < 5`; error badge "processado parcialmente" when `errors.length > 0`; each card's QR encodes the direct URL of that clip's video file (scan → open/download that clip).
+- UI copy (exact): heading "🎬 Lances"; empty state "Nenhum lance ainda. Aperte GRAVAR no controle!"; per-card title "Lance #{n} — {HH:mm}"; download links "⬇️ Combinado" and "⬇️ {angle name}"; share button "📤 Compartilhar"; disk banner "⚠️ Pouco espaço em disco ({n} GB livres)" when `freeDiskGB < 5`; error badge "processado parcialmente" when `errors.length > 0`; each card's QR encodes the direct URL of that clip's video file (scan → open/download that clip).
+- Platform contract (iOS/Android): "📤 Compartilhar" uses the Web Share API with files (`navigator.canShare({files})` → `navigator.share`) — on phones it opens the native share sheet (WhatsApp/Instagram direct); hidden when `navigator.share` is unavailable (desktop), and falls back to navigating to the file if `canShare` rejects the payload. Clips are MP4 H.264/AAC, playable inline on iPhone (Safari can't play WebM — that's why the server normalizes).
 
 - [ ] **Step 1: Implement the html**
 
@@ -2988,8 +3102,35 @@ function card(clip: ClipEntry): string {
     <p><strong>Lance #${clip.clipNumber}</strong> — ${time(clip.createdAt)}${partial}</p>
     <video controls preload="metadata" src="${video}"></video>
     <p>${downloads}</p>
-    <img alt="QR" style="width:96px;background:#fff;border-radius:6px" src="/api/qr.svg?data=${encodeURIComponent(location.origin + video)}" />
+    <button class="share-btn" data-file="${video}" data-name="lance-${String(clip.clipNumber).padStart(3, "0")}.mp4">📤 Compartilhar</button>
+    <img alt="QR" style="width:96px;background:#fff;border-radius:6px;margin-top:8px" src="/api/qr.svg?data=${encodeURIComponent(location.origin + video)}" />
   </div>`;
+}
+
+function wireShareButtons(): void {
+  document.querySelectorAll<HTMLButtonElement>(".share-btn").forEach((btn) => {
+    if (!("share" in navigator)) {
+      btn.hidden = true; // desktop browsers: downloads links cover it
+      return;
+    }
+    btn.onclick = async () => {
+      btn.disabled = true;
+      try {
+        const blob = await (await fetch(btn.dataset.file!)).blob();
+        const file = new File([blob], btn.dataset.name!, { type: "video/mp4" });
+        const nav = navigator as Navigator & { canShare?(data: { files: File[] }): boolean };
+        if (nav.canShare?.({ files: [file] })) {
+          await navigator.share({ files: [file] } as ShareData); // native share sheet (WhatsApp etc.)
+        } else {
+          location.href = btn.dataset.file!;
+        }
+      } catch {
+        /* user cancelled the share sheet */
+      } finally {
+        btn.disabled = false;
+      }
+    };
+  });
 }
 
 async function load(): Promise<void> {
@@ -2997,6 +3138,7 @@ async function load(): Promise<void> {
   const ready = clips.filter((c) => c.state !== "processing");
   $("empty").hidden = ready.length > 0;
   $("list").innerHTML = ready.map(card).join("");
+  wireShareButtons();
   const state = await api<{ freeDiskGB: number | null }>("/api/state");
   if (state.freeDiskGB !== null && state.freeDiskGB < 5) {
     $("disk-banner").hidden = false;
@@ -3371,7 +3513,7 @@ dist/
 
 - [ ] **Step 3: Write README.md (pt-BR), covering:**
 
-Sections with real content (no placeholders): o que é; requisitos (Docker Desktop; ou Bun+FFmpeg para rodar sem container); como iniciar (`./start.sh`, escanear o QR do terminal, senha impressa no boot e guardada em `data/config.json`); como usar (papéis, tripé, tomada, aceitar o aviso do certificado uma vez); configuração (`data/config.json`: `clipDurationSeconds`, `layout: "sequential" | "side-by-side"`, `retentionDays`, `clipDurationMaxSeconds`); desenvolvimento (`bun install`, `bun run dev`, `bun test`, `bun run test:e2e`); **Checklist de quadra** (copiar do spec: 2 celulares na tomada, wake lock ativo — tela acesa, 5 lances gravados, conferência na galeria, teste de queda de Wi-Fi de uma câmera); nota de performance (Docker = encoding por software; nativo com VideoToolbox é 5–10× mais rápido).
+Sections with real content (no placeholders): o que é; requisitos (Docker Desktop; ou Bun+FFmpeg para rodar sem container); como iniciar (`./start.sh`, escanear o QR do terminal, senha impressa no boot e guardada em `data/config.json`); como usar (papéis, tripé, tomada); **Conectando cada aparelho** — iPhone: usar Safari; se o aviso "Continuar" não bastar (WebSocket), baixar o certificado em `/cert`, instalar em Ajustes → Geral → VPN e Gerenciamento de Dispositivo e ativar em Ajustes → Geral → Sobre → Confiança de Certificado; Android: usar Chrome e tocar em "Avançado → Continuar" no aviso; ambos: desligar economia de bateria, deixar na tomada e à sombra (calor derruba a qualidade), e saber que 60fps é melhor esforço do navegador — a página da câmera mostra o fps real; configuração (`data/config.json`: `clipDurationSeconds`, `layout: "sequential" | "side-by-side"`, `retentionDays`, `clipDurationMaxSeconds`); desenvolvimento (`bun install`, `bun run dev`, `bun test`, `bun run test:e2e`); **Checklist de quadra** (copiar do spec: 2 celulares na tomada, wake lock ativo — tela acesa, 5 lances gravados, conferência na galeria, teste de queda de Wi-Fi de uma câmera); nota de performance (Docker = encoding por software; nativo com VideoToolbox é 5–10× mais rápido).
 
 - [ ] **Step 4: Build and smoke-test the container**
 
