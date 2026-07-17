@@ -62,6 +62,7 @@ async function recoverStream(): Promise<void> {
     recorder = null;
   }
   clearTimeout(cycleTimer);
+  pendingRecord = null; // a triggered clip can't survive stream loss — avoid a later spurious empty upload
   files = [];
   stream.getTracks().forEach((t) => t.stop());
   stream = await acquireMedia(currentDeviceId);
