@@ -1,0 +1,13 @@
+{
+  "name": "replay-local",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun run src/server/index.ts",
+    "start": "bun run src/server/index.ts",
+    "test": "bun test tests/unit tests/integration",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": { "qrcode": "^1.5.4" },
+  "devDependencies": { "@types/qrcode": "^1.5.5", "@playwright/test": "^1.49.0" }
+}
