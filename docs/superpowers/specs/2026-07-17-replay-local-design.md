@@ -22,6 +22,7 @@ Sistema local de replay esportivo, inspirado no ReplayBR/Gravaê, para uso próp
 | Runtime | **Bun + TypeScript** (sem framework; `Bun.serve` para HTTP, WebSocket e TLS) |
 | Buffer de replay | **Abordagem B — buffer no celular**, upload sob demanda (escolha do usuário, ciente dos trade-offs vs. buffer no servidor) |
 | Tamanho do clipe | **Parametrizável em dois níveis**: padrão no `config.json` (20s) + seletor na página `/controle` (10/20/30/45/60s) valendo para os próximos lances |
+| Qualidade de captura | **1080p@60fps** como alvo (fallback automático para 30fps e/ou 720p conforme o aparelho) |
 
 ## Fora de escopo (YAGNI)
 
@@ -73,12 +74,12 @@ Multi-quadra, contas de usuário individuais, upload para nuvem, integração Wh
 
 ## Página câmera — buffer rolante no celular
 
-**Captura.** `getUserMedia` (câmera traseira, 1080p@30fps, fallback 720p) + `MediaRecorder` com chunks de 1s. Áudio capturado por padrão.
+**Captura.** `getUserMedia` com câmera traseira solicitando **1080p@60fps** via constraint `ideal` — aparelhos que não entregam 60fps no navegador caem para 30fps automaticamente, e quem não aguenta 1080p cai para 720p. `MediaRecorder` com chunks de 1s e bitrate alvo de ~10–12 Mbps em 60fps (~6 Mbps em 30fps). Áudio capturado por padrão. A página mostra a resolução/fps reais obtidos, para o operador saber o que cada celular está entregando.
 
 **Buffer rolante por ciclos.** Chunks de `MediaRecorder` só são decodáveis a partir do início do arquivo, então o esquema é: reiniciar o gravador a cada **ciclo** e manter em memória o **arquivo do ciclo anterior (completo) + o atual (crescendo)**. Cobertura garantida = 1 ciclo inteiro, mesmo logo após um reinício.
 
 - **Ciclo = max(30s, janela configurada).** Quando a janela muda no `/controle`, o servidor retransmite às câmeras, que aplicam no próximo ciclo. Isso limita o upload ao pior caso de 2× o ciclo por câmera.
-- Teto da janela: **60s** (mantém memória ≤ ~90–135 MB em 1080p ~6 Mbps). Janela maior exigiria subir o teto na configuração — suportado pelo design, custa memória do celular.
+- Teto da janela: **60s** (pico de memória ≈ 150–180 MB em 1080p60 a ~10–12 Mbps; nos fallbacks 30fps/720p, proporcionalmente menos). Janela maior exigiria subir o teto na configuração — suportado pelo design, custa memória do celular.
 - No reinício de ciclo há um micro-gap (~100–300ms), no máximo 1× por ciclo; se cair dentro da janela, vira uma emenda quase imperceptível (servidor concatena os dois arquivos).
 
 **Ao receber `GRAVAR(jobId, T, janela)`:** a página **para o gravador atual** (finaliza o arquivo de forma limpa em todas as plataformas — mais confiável que `requestData()`) e já inicia o próximo ciclo; seleciona os arquivos que cobrem `[T − janela, T]`; sobe via `POST /api/lances/:id/upload` (multipart) com metadados: nome do ângulo, horário de início de cada arquivo (em relógio do servidor), mimetype/codec. Retry de upload: 3 tentativas com backoff. O gap do reinício fica **depois** de `T`, fora do clipe.
@@ -101,7 +102,7 @@ Multi-quadra, contas de usuário individuais, upload para nuvem, integração Wh
 5. Cooldown de 2s entre triggers (anti duplo-toque). Lances em sequência são permitidos — o buffer do celular não se esgota; os jobs enfileiram.
 
 **Pipeline FFmpeg (por job):**
-- Por ângulo: concatenar os 2 arquivos se houver emenda de ciclo → corte exato em `[T − janela, T]` usando o horário de início do arquivo (seek preciso com re-encode) → normalizar para H.264/AAC MP4 (1080p, áudio do próprio ângulo).
+- Por ângulo: concatenar os 2 arquivos se houver emenda de ciclo → corte exato em `[T − janela, T]` usando o horário de início do arquivo (seek preciso com re-encode) → normalizar para H.264/AAC MP4 **1080p60 constante** (fontes que capturaram em 30fps têm frames conformados; áudio do próprio ângulo). FPS constante na saída é o que permite concatenar e combinar ângulos de aparelhos diferentes sem dessincronia.
 - Combinado, conforme layout configurado:
   - **`sequencia`** (padrão): ângulos um após o outro, corte seco.
   - **`lado-a-lado`**: ângulos juntos na tela; áudio do primeiro ângulo.
@@ -111,7 +112,7 @@ Multi-quadra, contas de usuário individuais, upload para nuvem, integração Wh
 **Armazenamento (sem banco de dados):**
 ```
 data/
-├── config.json          # senha, janela padrão, layout, resolução, retenção, teto da janela
+├── config.json          # senha, janela padrão, layout, resolução/fps alvo, retenção, teto da janela
 ├── certs/               # certificado autoassinado (gerado no 1º boot)
 └── clips/2026-07-17/lance-042/
     ├── combinado.mp4
@@ -150,7 +151,7 @@ A galeria lista lendo o diretório. Volume Docker mapeia `data/` para uma pasta 
 
 ## Critérios de sucesso (MVP)
 
-1. Com 2 celulares reais + 1 controle na rede local: apertar GRAVAR produz o clipe combinado com a duração configurada, visível na galeria em ≤ 60s.
+1. Com 2 celulares reais + 1 controle na rede local: apertar GRAVAR produz o clipe combinado com a duração configurada, visível na galeria em ≤ 90s.
 2. Ajustar a duração no `/controle` vale para o lance seguinte.
 3. Uma câmera cai → lance sai com o ângulo restante; a câmera reconecta sozinha ao voltar.
 4. Sistema opera sem internet (rede local pura) após o build da imagem.
@@ -188,4 +189,4 @@ replaybr/
 
 ## Notas de performance
 
-Dentro do Docker no Mac, o FFmpeg codifica por software (a VM Linux não acessa o media engine do Apple Silicon) — estimativa de ~15–30s de processamento por lance de 2 ângulos × 20s. Se precisar de mais velocidade no futuro, rodar fora do container (`bun` nativo + `ffmpeg` do brew, com VideoToolbox) fica 5–10× mais rápido; o design funciona idêntico nos dois modos.
+Dentro do Docker no Mac, o FFmpeg codifica por software (a VM Linux não acessa o media engine do Apple Silicon) — em 1080p60, estimativa de ~30–60s de processamento por lance de 2 ângulos × 20s. Se precisar de mais velocidade no futuro, rodar fora do container (`bun` nativo + `ffmpeg` do brew, com VideoToolbox) fica 5–10× mais rápido; o design funciona idêntico nos dois modos. O 60fps também abre a porta para um futuro modo câmera lenta (fora do escopo do MVP).
