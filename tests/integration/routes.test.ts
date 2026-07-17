@@ -7,12 +7,13 @@ import { createAppForTest } from "./test-app";
 let base: string;
 let dataDirRef: string;
 let stop: () => void;
+let app: Awaited<ReturnType<typeof createAppForTest>>;
 
 beforeAll(async () => {
   const dataDir = mkdtempSync(join(tmpdir(), "replay-routes-"));
   dataDirRef = dataDir;
   writeFileSync(join(dataDir, "config.json"), JSON.stringify({ password: "senha-teste" }));
-  const app = await createAppForTest(dataDir);
+  app = await createAppForTest(dataDir);
   base = app.base;
   stop = app.stop;
 });
@@ -77,5 +78,26 @@ describe("routes", () => {
     expect(res.status).toBe(200);
     expect(res.headers.get("content-disposition")).toContain("replay-local.crt");
     expect(await res.text()).toBe("FAKE PEM");
+  });
+
+  it("rejects malformed filesMeta items with 400, not 500", async () => {
+    const cookie = await login();
+    // put one camera online via the hub, then trigger a real capturing job
+    const fakeWs = { data: {} as any, send() {}, subscribe() {} } as any;
+    app.ctx.hub.open(fakeWs);
+    app.ctx.hub.message(fakeWs, JSON.stringify({ type: "register", role: "camera", name: "T" }), Date.now());
+    const trig = app.ctx.jobs.trigger(Date.now()) as { jobId: string };
+    expect(trig.jobId).toBeTruthy();
+
+    const form = new FormData();
+    form.append("cameraId", "cam-x");
+    form.append("angleName", "Fundo");
+    form.append("filesMeta", JSON.stringify([{ startMs: 1 }])); // missing mimeType
+    form.append("file0", new Blob(["x"]), "part0");
+    const res = await fetch(`${base}/api/clips/${trig.jobId}/upload`, { method: "POST", headers: { cookie }, body: form });
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBeTruthy();
+
+    app.ctx.hub.close(fakeWs); // return the shared hub to zero cameras for other tests
   });
 });

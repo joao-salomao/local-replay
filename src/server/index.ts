@@ -60,7 +60,7 @@ Bun.serve({
   port: httpPort,
   fetch(req) {
     const url = new URL(req.url);
-    return Response.redirect(`https://${url.hostname}:${httpsPort}${url.pathname}`, 301);
+    return Response.redirect(`https://${url.hostname}:${httpsPort}${url.pathname}${url.search}`, 301);
   },
 });
 

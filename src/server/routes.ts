@@ -132,6 +132,9 @@ export function createApp(ctx: AppContext): {
       if (!cameraId || !angleName || !Array.isArray(filesMeta) || filesMeta.length === 0) {
         return json({ error: "missing fields" }, 400);
       }
+      if (!filesMeta.every((m) => m && typeof m.mimeType === "string" && typeof m.startMs === "number")) {
+        return json({ error: "bad filesMeta" }, 400);
+      }
       const slug = slugify(angleName);
       const saved: { path: string; startMs: number }[] = [];
       for (let i = 0; i < filesMeta.length; i++) {
