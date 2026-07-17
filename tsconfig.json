@@ -2,7 +2,7 @@
   "compilerOptions": {
     "target": "ESNext", "module": "ESNext", "moduleResolution": "bundler",
     "strict": true, "noUncheckedIndexedAccess": true, "skipLibCheck": true,
-    "types": ["bun-types"], "lib": ["ESNext", "DOM", "DOM.Iterable"]
+    "lib": ["ESNext", "DOM", "DOM.Iterable"]
   },
   "include": ["src", "tests"]
 }
