@@ -13,7 +13,7 @@ describe("computeOffset", () => {
 
   it("uses the median across samples (robust to one outlier)", () => {
     const samples = [
-      { clientSent: 0, serverTime: 510, clientReceived: 20 },   // 500
+      { clientSent: 0, serverTime: 510, clientReceived: 20 }, // 500
       { clientSent: 100, serverTime: 611, clientReceived: 122 }, // 500
       { clientSent: 200, serverTime: 1300, clientReceived: 220 }, // 1090 outlier
     ];

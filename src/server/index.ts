@@ -30,9 +30,15 @@ const ctx: AppContext = {
   jobs: undefined as unknown as JobManager,
 };
 ctx.jobs = new JobManager({
-  storage, config, hub, queue,
+  storage,
+  config,
+  hub,
+  queue,
   publishRecord: (jobId, t, windowSec) =>
-    server.publish(TOPIC_CAMERAS, JSON.stringify({ type: "record", jobId, t, windowSec } satisfies ServerMessage)),
+    server.publish(
+      TOPIC_CAMERAS,
+      JSON.stringify({ type: "record", jobId, t, windowSec } satisfies ServerMessage),
+    ),
   onUpdate: () => publishState(),
 });
 
@@ -60,13 +66,19 @@ Bun.serve({
   port: httpPort,
   fetch(req) {
     const url = new URL(req.url);
-    return Response.redirect(`https://${url.hostname}:${httpsPort}${url.pathname}${url.search}`, 301);
+    return Response.redirect(
+      `https://${url.hostname}:${httpsPort}${url.pathname}${url.search}`,
+      301,
+    );
   },
 });
 
 setInterval(() => hub.sweep(Date.now()), 2_000);
 storage.cleanupRetention(config.value.retentionDays, Date.now());
-setInterval(() => storage.cleanupRetention(config.value.retentionDays, Date.now()), 24 * 60 * 60 * 1000);
+setInterval(
+  () => storage.cleanupRetention(config.value.retentionDays, Date.now()),
+  24 * 60 * 60 * 1000,
+);
 
 const host = process.env.HOST_LAN_IP ?? "localhost";
 const entryUrl = `https://${host}:${httpsPort}`;

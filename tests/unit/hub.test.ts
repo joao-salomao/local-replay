@@ -44,7 +44,11 @@ describe("Hub", () => {
     hub.open(ws);
     hub.message(ws, JSON.stringify({ type: "register", role: "camera", name: "A" }), 0);
     void sent;
-    hub.message(ws, JSON.stringify({ type: "cameraStatus", width: 1920, height: 1080, fps: 60 }), 1000);
+    hub.message(
+      ws,
+      JSON.stringify({ type: "cameraStatus", width: 1920, height: 1080, fps: 60 }),
+      1000,
+    );
     expect(hub.cameras()[0]).toMatchObject({ width: 1920, fps: 60, online: true });
 
     hub.sweep(1000 + OFFLINE_AFTER_MS + 1);
@@ -64,13 +68,25 @@ describe("Hub", () => {
     let changes = 0;
     hub.onStateChanged = () => changes++;
 
-    hub.message(ws, JSON.stringify({ type: "cameraStatus", width: 1920, height: 1080, fps: 60 }), 1000);
+    hub.message(
+      ws,
+      JSON.stringify({ type: "cameraStatus", width: 1920, height: 1080, fps: 60 }),
+      1000,
+    );
     expect(changes).toBe(1); // first real values fire
 
-    hub.message(ws, JSON.stringify({ type: "cameraStatus", width: 1920, height: 1080, fps: 60 }), 2000);
+    hub.message(
+      ws,
+      JSON.stringify({ type: "cameraStatus", width: 1920, height: 1080, fps: 60 }),
+      2000,
+    );
     expect(changes).toBe(1); // identical re-report: suppressed
 
-    hub.message(ws, JSON.stringify({ type: "cameraStatus", width: 1920, height: 1080, fps: 30 }), 3000);
+    hub.message(
+      ws,
+      JSON.stringify({ type: "cameraStatus", width: 1920, height: 1080, fps: 30 }),
+      3000,
+    );
     expect(changes).toBe(2); // fps changed: fires
 
     hub.message(ws, JSON.stringify({ type: "hb" }), 4000);

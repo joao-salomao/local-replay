@@ -11,7 +11,10 @@ import { createApp, type AppContext } from "../../src/server/routes";
 import { Storage } from "../../src/server/storage";
 import type { ServerMessage } from "../../src/shared/protocol";
 
-export async function createAppForTest(dataDir: string, jobOverrides: { uploadTimeoutMs?: number; cooldownMs?: number } = {}) {
+export async function createAppForTest(
+  dataDir: string,
+  jobOverrides: { uploadTimeoutMs?: number; cooldownMs?: number } = {},
+) {
   const config = ConfigStore.load(dataDir);
   const storage = new Storage(dataDir);
   const hub = new Hub();
@@ -27,10 +30,17 @@ export async function createAppForTest(dataDir: string, jobOverrides: { uploadTi
     jobs: undefined as unknown as JobManager,
   };
   ctx.jobs = new JobManager({
-    storage, config, hub, queue,
+    storage,
+    config,
+    hub,
+    queue,
     publishRecord: (jobId, t, windowSec) =>
-      server.publish(TOPIC_CAMERAS, JSON.stringify({ type: "record", jobId, t, windowSec } satisfies ServerMessage)),
-    onUpdate: (job) => server.publish(TOPIC_ALL, JSON.stringify({ type: "jobUpdate", job } satisfies ServerMessage)),
+      server.publish(
+        TOPIC_CAMERAS,
+        JSON.stringify({ type: "record", jobId, t, windowSec } satisfies ServerMessage),
+      ),
+    onUpdate: (job) =>
+      server.publish(TOPIC_ALL, JSON.stringify({ type: "jobUpdate", job } satisfies ServerMessage)),
     ...jobOverrides,
   });
   const app = createApp(ctx);
@@ -45,5 +55,11 @@ export async function createAppForTest(dataDir: string, jobOverrides: { uploadTi
         jobs: ctx.jobs.jobs(),
       } satisfies ServerMessage),
     );
-  return { base: `http://localhost:${server.port}`, ws: `ws://localhost:${server.port}/ws`, server, ctx, stop: () => server.stop(true) };
+  return {
+    base: `http://localhost:${server.port}`,
+    ws: `ws://localhost:${server.port}/ws`,
+    server,
+    ctx,
+    stop: () => server.stop(true),
+  };
 }

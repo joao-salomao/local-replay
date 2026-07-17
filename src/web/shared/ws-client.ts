@@ -21,7 +21,11 @@ export class WsClient {
     ws.onmessage = (ev) => {
       const msg = JSON.parse(String(ev.data)) as ServerMessage;
       if (msg.type === "ntpReply") {
-        this.samples.push({ clientSent: msg.clientTime, serverTime: msg.serverTime, clientReceived: Date.now() });
+        this.samples.push({
+          clientSent: msg.clientTime,
+          serverTime: msg.serverTime,
+          clientReceived: Date.now(),
+        });
         if (this.samples.length >= 3) this.offset = computeOffset(this.samples.slice(-3));
         return;
       }

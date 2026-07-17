@@ -11,7 +11,8 @@ const ASSET_WHITELIST = new Set(["login.js", "camera.js", "control.js", "clips.j
 
 export async function buildPages(webDir: string, outDir: string): Promise<PageAssets> {
   mkdirSync(outDir, { recursive: true });
-  const entry = (p: PageName) => (p === "login" ? join(webDir, "login.ts") : join(webDir, p, `${p}.ts`));
+  const entry = (p: PageName) =>
+    p === "login" ? join(webDir, "login.ts") : join(webDir, p, `${p}.ts`);
   const result = await Bun.build({
     entrypoints: (["login", "camera", "control", "clips"] as PageName[]).map(entry),
     outdir: outDir,

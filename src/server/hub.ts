@@ -32,7 +32,11 @@ export class Hub {
       return;
     }
     if (msg.type === "ntp") {
-      const reply: ServerMessage = { type: "ntpReply", clientTime: msg.clientTime, serverTime: nowMs };
+      const reply: ServerMessage = {
+        type: "ntpReply",
+        clientTime: msg.clientTime,
+        serverTime: nowMs,
+      };
       ws.send(JSON.stringify(reply));
       return;
     }
@@ -59,7 +63,10 @@ export class Hub {
     cam.info.online = true;
     if (msg.type === "cameraStatus") {
       const changed =
-        wasOffline || cam.info.width !== msg.width || cam.info.height !== msg.height || cam.info.fps !== msg.fps;
+        wasOffline ||
+        cam.info.width !== msg.width ||
+        cam.info.height !== msg.height ||
+        cam.info.fps !== msg.fps;
       cam.info.width = msg.width;
       cam.info.height = msg.height;
       cam.info.fps = msg.fps;

@@ -14,12 +14,27 @@ export async function ensureCert(dataDir: string): Promise<{ certPath: string; k
     rmSync(keyPath, { force: true });
   }
   if (!existsSync(certPath) || !existsSync(keyPath)) {
-    const san = wantedIp ? `subjectAltName=DNS:replay.local,IP:${wantedIp}` : "subjectAltName=DNS:replay.local";
+    const san = wantedIp
+      ? `subjectAltName=DNS:replay.local,IP:${wantedIp}`
+      : "subjectAltName=DNS:replay.local";
     const proc = Bun.spawn(
       [
-        "openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes",
-        "-keyout", keyPath, "-out", certPath, "-days", "3650",
-        "-subj", "/CN=replay.local", "-addext", san,
+        "openssl",
+        "req",
+        "-x509",
+        "-newkey",
+        "rsa:2048",
+        "-nodes",
+        "-keyout",
+        keyPath,
+        "-out",
+        certPath,
+        "-days",
+        "3650",
+        "-subj",
+        "/CN=replay.local",
+        "-addext",
+        san,
       ],
       { stdout: "ignore", stderr: "pipe" },
     );

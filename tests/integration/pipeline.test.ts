@@ -13,9 +13,19 @@ let rawA0: string, rawA1: string, rawB0: string;
 
 async function synth(path: string, seconds: number): Promise<void> {
   await runFfmpeg([
-    "-hide_banner", "-y",
-    "-f", "lavfi", "-i", `testsrc=size=1280x720:rate=30:duration=${seconds}`,
-    "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p", path,
+    "-hide_banner",
+    "-y",
+    "-f",
+    "lavfi",
+    "-i",
+    `testsrc=size=1280x720:rate=30:duration=${seconds}`,
+    "-c:v",
+    "libx264",
+    "-preset",
+    "ultrafast",
+    "-pix_fmt",
+    "yuv420p",
+    path,
   ]);
 }
 
@@ -33,10 +43,20 @@ describe("processClip", () => {
     mkdirSync(join(clipDir, "raw"), { recursive: true });
     const t = 100_000;
     const result = await processClip({
-      clipDir, t, windowSec: 10, config,
+      clipDir,
+      t,
+      windowSec: 10,
+      config,
       angles: [
         // angle A: two 8s files with a 200ms gap; window [90s,100s] spans both
-        { name: "Fundo", slug: "fundo", files: [{ path: rawA0, startMs: 84_000 }, { path: rawA1, startMs: 92_200 }] },
+        {
+          name: "Fundo",
+          slug: "fundo",
+          files: [
+            { path: rawA0, startMs: 84_000 },
+            { path: rawA1, startMs: 92_200 },
+          ],
+        },
         // angle B: one 12s file covering the window
         { name: "Lateral rede", slug: "lateral-rede", files: [{ path: rawB0, startMs: 89_000 }] },
       ],
@@ -62,7 +82,10 @@ describe("processClip", () => {
     const clipDir = mkdtempSync(join(tmpdir(), "replay-clip-"));
     mkdirSync(join(clipDir, "raw"), { recursive: true });
     const result = await processClip({
-      clipDir, t: 100_000, windowSec: 5, config: { ...config, layout: "side-by-side" },
+      clipDir,
+      t: 100_000,
+      windowSec: 5,
+      config: { ...config, layout: "side-by-side" },
       angles: [
         { name: "A", slug: "a", files: [{ path: rawB0, startMs: 90_000 }] },
         { name: "B", slug: "b", files: [{ path: rawB0, startMs: 90_000 }] },
@@ -80,7 +103,10 @@ describe("processClip", () => {
     const bad = join(clipDir, "raw", "bad.mp4");
     await Bun.write(bad, "not a video");
     const result = await processClip({
-      clipDir, t: 100_000, windowSec: 5, config,
+      clipDir,
+      t: 100_000,
+      windowSec: 5,
+      config,
       angles: [
         { name: "Ok", slug: "ok", files: [{ path: rawB0, startMs: 90_000 }] },
         { name: "Bad", slug: "bad", files: [{ path: bad, startMs: 90_000 }] },

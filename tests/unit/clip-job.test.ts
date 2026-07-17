@@ -31,7 +31,11 @@ function setup(cameraIds: string[], processOk = true, writeMetaThrows = false) {
     },
     processFn: async () => {
       if (!processOk) throw new Error("ffmpeg exploded");
-      return { outputs: { combined: "combined.mp4", angles: { a: "angle-a.mp4" } }, cameras: [], errors: [] };
+      return {
+        outputs: { combined: "combined.mp4", angles: { a: "angle-a.mp4" } },
+        cameras: [],
+        errors: [],
+      };
     },
     uploadTimeoutMs: 60,
     cooldownMs: 20,

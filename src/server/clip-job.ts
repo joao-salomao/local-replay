@@ -50,9 +50,17 @@ export class JobManager {
     const clipNumber = this.deps.storage.nextClipNumber();
     const dir = this.deps.storage.createClipDir(clipNumber, nowMs);
     const windowSec = this.deps.config.value.clipDurationSeconds;
-    const status: JobStatus = { jobId: crypto.randomUUID(), clipNumber, state: "capturing", createdAt: nowMs };
+    const status: JobStatus = {
+      jobId: crypto.randomUUID(),
+      clipNumber,
+      state: "capturing",
+      createdAt: nowMs,
+    };
     const job: ActiveJob = {
-      status, dir, t: nowMs, windowSec,
+      status,
+      dir,
+      t: nowMs,
+      windowSec,
       expected: new Set(cameraIds),
       delivered: new Set(),
       angles: [],
@@ -121,11 +129,18 @@ export class JobManager {
         meta.errors.push("no camera uploads received");
       } else {
         const run = this.deps.processFn ?? processClip;
-        const result = await run({ clipDir: job.dir, t: job.t, windowSec: job.windowSec, angles: job.angles, config: this.deps.config.value });
+        const result = await run({
+          clipDir: job.dir,
+          t: job.t,
+          windowSec: job.windowSec,
+          angles: job.angles,
+          config: this.deps.config.value,
+        });
         meta.cameras = result.cameras;
         meta.outputs = result.outputs;
         meta.errors = result.errors;
-        if (result.outputs.combined || Object.keys(result.outputs.angles).length > 0) meta.state = "ready";
+        if (result.outputs.combined || Object.keys(result.outputs.angles).length > 0)
+          meta.state = "ready";
       }
     } catch (e) {
       meta.errors.push(e instanceof Error ? e.message : String(e));

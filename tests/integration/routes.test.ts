@@ -20,7 +20,10 @@ beforeAll(async () => {
 afterAll(() => stop());
 
 const login = async (): Promise<string> => {
-  const res = await fetch(`${base}/api/login`, { method: "POST", body: JSON.stringify({ password: "senha-teste" }) });
+  const res = await fetch(`${base}/api/login`, {
+    method: "POST",
+    body: JSON.stringify({ password: "senha-teste" }),
+  });
   expect(res.status).toBe(200);
   return res.headers.get("set-cookie")!.split(";")[0]!;
 };
@@ -36,15 +39,32 @@ describe("routes", () => {
   });
 
   it("rejects wrong passwords and rate limits logins", async () => {
-    expect((await fetch(`${base}/api/login`, { method: "POST", body: JSON.stringify({ password: "nope" }) })).status).toBe(401);
+    expect(
+      (
+        await fetch(`${base}/api/login`, {
+          method: "POST",
+          body: JSON.stringify({ password: "nope" }),
+        })
+      ).status,
+    ).toBe(401);
   });
 
   it("refuses to record without cameras and validates clip duration", async () => {
     const cookie = await login();
-    expect((await fetch(`${base}/api/record`, { method: "POST", headers: { cookie } })).status).toBe(409);
-    const bad = await fetch(`${base}/api/config/clip-duration`, { method: "POST", headers: { cookie }, body: JSON.stringify({ seconds: 25 }) });
+    expect(
+      (await fetch(`${base}/api/record`, { method: "POST", headers: { cookie } })).status,
+    ).toBe(409);
+    const bad = await fetch(`${base}/api/config/clip-duration`, {
+      method: "POST",
+      headers: { cookie },
+      body: JSON.stringify({ seconds: 25 }),
+    });
     expect(bad.status).toBe(400);
-    const ok = await fetch(`${base}/api/config/clip-duration`, { method: "POST", headers: { cookie }, body: JSON.stringify({ seconds: 30 }) });
+    const ok = await fetch(`${base}/api/config/clip-duration`, {
+      method: "POST",
+      headers: { cookie },
+      body: JSON.stringify({ seconds: 30 }),
+    });
     expect((await ok.json()).clipDurationSeconds).toBe(30);
     const state = await (await fetch(`${base}/api/state`, { headers: { cookie } })).json();
     expect(state.clipDurationSeconds).toBe(30);
@@ -53,8 +73,12 @@ describe("routes", () => {
 
   it("blocks path traversal on /files", async () => {
     const cookie = await login();
-    expect((await fetch(`${base}/files/clips/../config.json`, { headers: { cookie } })).status).toBe(404);
-    expect((await fetch(`${base}/files/clips/nope/x.mp4`, { headers: { cookie } })).status).toBe(404);
+    expect(
+      (await fetch(`${base}/files/clips/../config.json`, { headers: { cookie } })).status,
+    ).toBe(404);
+    expect((await fetch(`${base}/files/clips/nope/x.mp4`, { headers: { cookie } })).status).toBe(
+      404,
+    );
   });
 
   it("requires auth on the api and on /ws", async () => {
@@ -65,7 +89,9 @@ describe("routes", () => {
 
   it("serves a qr svg", async () => {
     const cookie = await login();
-    const res = await fetch(`${base}/api/qr.svg?data=https://example.local`, { headers: { cookie } });
+    const res = await fetch(`${base}/api/qr.svg?data=https://example.local`, {
+      headers: { cookie },
+    });
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toContain("svg");
     expect(await res.text()).toContain("<svg");
@@ -85,7 +111,11 @@ describe("routes", () => {
     // put one camera online via the hub, then trigger a real capturing job
     const fakeWs = { data: {} as any, send() {}, subscribe() {} } as any;
     app.ctx.hub.open(fakeWs);
-    app.ctx.hub.message(fakeWs, JSON.stringify({ type: "register", role: "camera", name: "T" }), Date.now());
+    app.ctx.hub.message(
+      fakeWs,
+      JSON.stringify({ type: "register", role: "camera", name: "T" }),
+      Date.now(),
+    );
     const trig = app.ctx.jobs.trigger(Date.now()) as { jobId: string };
     expect(trig.jobId).toBeTruthy();
 
@@ -94,7 +124,11 @@ describe("routes", () => {
     form.append("angleName", "Fundo");
     form.append("filesMeta", JSON.stringify([{ startMs: 1 }])); // missing mimeType
     form.append("file0", new Blob(["x"]), "part0");
-    const res = await fetch(`${base}/api/clips/${trig.jobId}/upload`, { method: "POST", headers: { cookie }, body: form });
+    const res = await fetch(`${base}/api/clips/${trig.jobId}/upload`, {
+      method: "POST",
+      headers: { cookie },
+      body: form,
+    });
     expect(res.status).toBe(400);
     expect((await res.json()).error).toBeTruthy();
 

@@ -1,5 +1,9 @@
 import { describe, expect, it } from "bun:test";
-import { computeCutWindow, cycleSeconds, selectFilesForWindow } from "../../src/shared/buffer-window";
+import {
+  computeCutWindow,
+  cycleSeconds,
+  selectFilesForWindow,
+} from "../../src/shared/buffer-window";
 
 describe("cycleSeconds", () => {
   it("is max(min, clipDuration)", () => {
@@ -17,7 +21,10 @@ describe("selectFilesForWindow", () => {
   });
 
   it("picks both files when the window spans the cycle boundary", () => {
-    expect(selectFilesForWindow([cur, prev], 25_000, 40_000).map((f) => f.tag)).toEqual(["prev", "cur"]);
+    expect(selectFilesForWindow([cur, prev], 25_000, 40_000).map((f) => f.tag)).toEqual([
+      "prev",
+      "cur",
+    ]);
   });
 
   it("ignores files entirely outside the window", () => {

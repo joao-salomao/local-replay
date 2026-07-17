@@ -1,9 +1,21 @@
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statfsSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  statfsSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import type { Layout } from "./config";
 
 export type ClipOutputs = { combined: string | null; angles: Record<string, string> };
-export type ClipCamera = { name: string; slug: string; files: { startMs: number; durationMs: number }[] };
+export type ClipCamera = {
+  name: string;
+  slug: string;
+  files: { startMs: number; durationMs: number }[];
+};
 export type ClipMeta = {
   jobId: string;
   clipNumber: number;

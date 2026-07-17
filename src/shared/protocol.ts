@@ -1,7 +1,20 @@
-export type CameraInfo = { id: string; name: string; online: boolean; width: number; height: number; fps: number };
+export type CameraInfo = {
+  id: string;
+  name: string;
+  online: boolean;
+  width: number;
+  height: number;
+  fps: number;
+};
 
 export type JobState = "capturing" | "processing" | "ready" | "error";
-export type JobStatus = { jobId: string; clipNumber: number; state: JobState; error?: string; createdAt: number };
+export type JobStatus = {
+  jobId: string;
+  clipNumber: number;
+  state: JobState;
+  error?: string;
+  createdAt: number;
+};
 
 export type ClientMessage =
   | { type: "register"; role: "camera"; name: string }

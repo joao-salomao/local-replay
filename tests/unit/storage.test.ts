@@ -7,9 +7,17 @@ import { Storage, type ClipMeta } from "../../src/server/storage";
 const tmp = () => mkdtempSync(join(tmpdir(), "replay-storage-"));
 
 const meta = (over: Partial<ClipMeta>): ClipMeta => ({
-  jobId: "j1", clipNumber: 1, t: 0, windowSec: 20, layout: "sequential",
-  state: "ready", cameras: [], outputs: { combined: "combined.mp4", angles: {} },
-  errors: [], createdAt: 0, ...over,
+  jobId: "j1",
+  clipNumber: 1,
+  t: 0,
+  windowSec: 20,
+  layout: "sequential",
+  state: "ready",
+  cameras: [],
+  outputs: { combined: "combined.mp4", angles: {} },
+  errors: [],
+  createdAt: 0,
+  ...over,
 });
 
 describe("Storage", () => {

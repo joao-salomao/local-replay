@@ -43,8 +43,14 @@ async function acquireMedia(deviceId: string | null): Promise<MediaStream> {
 
 function reportStatus(): void {
   const s = stream.getVideoTracks()[0]!.getSettings();
-  ws.send({ type: "cameraStatus", width: s.width ?? 0, height: s.height ?? 0, fps: Math.round(s.frameRate ?? 0) });
-  $("media-info").textContent = `${s.width}×${s.height} @ ${Math.round(s.frameRate ?? 0)}fps (60fps é melhor esforço — varia por aparelho)`;
+  ws.send({
+    type: "cameraStatus",
+    width: s.width ?? 0,
+    height: s.height ?? 0,
+    fps: Math.round(s.frameRate ?? 0),
+  });
+  $("media-info").textContent =
+    `${s.width}×${s.height} @ ${Math.round(s.frameRate ?? 0)}fps (60fps é melhor esforço — varia por aparelho)`;
 }
 
 function watchTrack(): void {
@@ -58,7 +64,9 @@ async function recoverStream(): Promise<void> {
     recorder.onstop = null; // detach so the dead recorder cannot restart a cycle on the old stream
     try {
       if (recorder.state === "recording") recorder.stop();
-    } catch { /* already dead */ }
+    } catch {
+      /* already dead */
+    }
     recorder = null;
   }
   clearTimeout(cycleTimer);
@@ -73,11 +81,15 @@ async function recoverStream(): Promise<void> {
 }
 
 async function populateCameraSelect(): Promise<void> {
-  const cams = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === "videoinput");
+  const cams = (await navigator.mediaDevices.enumerateDevices()).filter(
+    (d) => d.kind === "videoinput",
+  );
   if (cams.length < 2) return;
   const select = $<HTMLSelectElement>("camera-select");
   select.hidden = false;
-  select.innerHTML = cams.map((c, i) => `<option value="${c.deviceId}">${c.label || `Câmera ${i + 1}`}</option>`).join("");
+  select.innerHTML = cams
+    .map((c, i) => `<option value="${c.deviceId}">${c.label || `Câmera ${i + 1}`}</option>`)
+    .join("");
   const active = stream.getVideoTracks()[0]!.getSettings().deviceId;
   if (active) select.value = active;
   select.onchange = () => {
@@ -137,7 +149,10 @@ async function uploadClip(
   const form = new FormData();
   form.append("cameraId", cameraId);
   form.append("angleName", localStorage.getItem("angleName") ?? "Camera");
-  form.append("filesMeta", JSON.stringify(selected.map((f) => ({ startMs: f.startMs, mimeType: f.mimeType }))));
+  form.append(
+    "filesMeta",
+    JSON.stringify(selected.map((f) => ({ startMs: f.startMs, mimeType: f.mimeType }))),
+  );
   selected.forEach((f, i) => form.append(`file${i}`, f.blob, `part${i}`));
   let outcome: "ok" | "notFound" | "failed" = "failed";
   for (let attempt = 0; attempt < 3; attempt++) {
@@ -184,7 +199,12 @@ function handleMessage(msg: ServerMessage): void {
 
 async function keepAwake(): Promise<void> {
   try {
-    wakeLock = await (navigator as Navigator & { wakeLock?: { request(t: string): Promise<{ release(): Promise<void> }> } }).wakeLock?.request("screen") ?? null;
+    wakeLock =
+      (await (
+        navigator as Navigator & {
+          wakeLock?: { request(t: string): Promise<{ release(): Promise<void> }> };
+        }
+      ).wakeLock?.request("screen")) ?? null;
   } catch {
     wakeLock = null; // headless/unsupported: keep going
   }

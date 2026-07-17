@@ -2,7 +2,12 @@ import { describe, expect, it } from "bun:test";
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { combineSequentialArgs, combineSideBySideArgs, normalizeCutArgs, writeConcatList } from "../../src/server/ffmpeg";
+import {
+  combineSequentialArgs,
+  combineSideBySideArgs,
+  normalizeCutArgs,
+  writeConcatList,
+} from "../../src/server/ffmpeg";
 
 describe("writeConcatList", () => {
   it("writes one quoted line per file, escaping single quotes", () => {
@@ -13,7 +18,17 @@ describe("writeConcatList", () => {
 });
 
 describe("normalizeCutArgs", () => {
-  const base = { listFile: null, input: "/raw/a.webm", startSec: 5, durationSec: 20, width: 1920, height: 1080, fps: 60, hasAudio: true, output: "/out/a.mp4" };
+  const base = {
+    listFile: null,
+    input: "/raw/a.webm",
+    startSec: 5,
+    durationSec: 20,
+    width: 1920,
+    height: 1080,
+    fps: 60,
+    hasAudio: true,
+    output: "/out/a.mp4",
+  };
 
   it("builds an accurate output-side cut with scale/pad/fps and x264/aac", () => {
     const args = normalizeCutArgs(base).join(" ");
@@ -41,12 +56,17 @@ describe("normalizeCutArgs", () => {
 
 describe("combine builders", () => {
   it("sequential uses concat demuxer with stream copy", () => {
-    expect(combineSequentialArgs("/tmp/list.txt", "/out/combined.mp4").join(" "))
-      .toContain("-f concat -safe 0 -i /tmp/list.txt -c copy");
+    expect(combineSequentialArgs("/tmp/list.txt", "/out/combined.mp4").join(" ")).toContain(
+      "-f concat -safe 0 -i /tmp/list.txt -c copy",
+    );
   });
 
   it("side-by-side stacks two halves at target size", () => {
-    const args = combineSideBySideArgs(["/a.mp4", "/b.mp4"], { width: 1920, height: 1080, fps: 60 }, "/out/c.mp4").join(" ");
+    const args = combineSideBySideArgs(
+      ["/a.mp4", "/b.mp4"],
+      { width: 1920, height: 1080, fps: 60 },
+      "/out/c.mp4",
+    ).join(" ");
     expect(args).toContain("scale=960:1080:force_original_aspect_ratio=decrease");
     expect(args).toContain("hstack=inputs=2");
     expect(args).toContain("-map 0:a:0");

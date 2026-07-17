@@ -14,7 +14,10 @@ $<HTMLFormElement>("login-form").onsubmit = async (ev) => {
   ev.preventDefault();
   $("login-error").textContent = "";
   try {
-    await api("/api/login", { method: "POST", body: JSON.stringify({ password: $<HTMLInputElement>("password").value }) });
+    await api("/api/login", {
+      method: "POST",
+      body: JSON.stringify({ password: $<HTMLInputElement>("password").value }),
+    });
     showRoles();
   } catch (e) {
     $("login-error").textContent = e instanceof Error ? e.message : "erro";

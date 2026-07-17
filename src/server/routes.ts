@@ -25,7 +25,10 @@ export type AppContext = {
 const CLIP_DURATION_OPTIONS = [10, 20, 30, 45, 60];
 
 const json = (data: unknown, status = 200, headers: Record<string, string> = {}) =>
-  new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json", ...headers } });
+  new Response(JSON.stringify(data), {
+    status,
+    headers: { "content-type": "application/json", ...headers },
+  });
 
 export function createApp(ctx: AppContext): {
   fetch(req: Request, server: Server<WSData>): Promise<Response | undefined>;
@@ -73,7 +76,8 @@ export function createApp(ctx: AppContext): {
 
     if (req.method === "POST" && path === "/api/login") {
       const ip = server.requestIP(req)?.address ?? "unknown";
-      if (!ctx.loginLimiter.allow(ip, Date.now())) return json({ error: "muitas tentativas, aguarde" }, 429);
+      if (!ctx.loginLimiter.allow(ip, Date.now()))
+        return json({ error: "muitas tentativas, aguarde" }, 429);
       const body = (await req.json().catch(() => ({}))) as { password?: string };
       const token = ctx.auth.login(body.password ?? "", Date.now());
       if (!token) return json({ error: "senha incorreta" }, 401);
@@ -90,7 +94,8 @@ export function createApp(ctx: AppContext): {
 
     if (req.method === "POST" && path === "/api/config/clip-duration") {
       const body = (await req.json().catch(() => ({}))) as { seconds?: number };
-      if (!CLIP_DURATION_OPTIONS.includes(body.seconds ?? -1)) return json({ error: "invalid seconds" }, 400);
+      if (!CLIP_DURATION_OPTIONS.includes(body.seconds ?? -1))
+        return json({ error: "invalid seconds" }, 400);
       ctx.config.setClipDuration(body.seconds!);
       ctx.hub.onStateChanged();
       return json({ clipDurationSeconds: ctx.config.value.clipDurationSeconds });
@@ -110,7 +115,8 @@ export function createApp(ctx: AppContext): {
     if (req.method === "GET" && path.startsWith("/files/clips/")) {
       const clipsRoot = resolve(ctx.dataDir, "clips");
       const target = resolve(ctx.dataDir, normalize(path.slice("/files/".length)));
-      if (!target.startsWith(clipsRoot + "/") || !existsSync(target)) return json({ error: "not found" }, 404);
+      if (!target.startsWith(clipsRoot + "/") || !existsSync(target))
+        return json({ error: "not found" }, 404);
       return new Response(Bun.file(target));
     }
 
@@ -132,7 +138,11 @@ export function createApp(ctx: AppContext): {
       if (!cameraId || !angleName || !Array.isArray(filesMeta) || filesMeta.length === 0) {
         return json({ error: "missing fields" }, 400);
       }
-      if (!filesMeta.every((m) => m && typeof m.mimeType === "string" && typeof m.startMs === "number")) {
+      if (
+        !filesMeta.every(
+          (m) => m && typeof m.mimeType === "string" && typeof m.startMs === "number",
+        )
+      ) {
         return json({ error: "bad filesMeta" }, 400);
       }
       const slug = slugify(angleName);
@@ -162,4 +172,5 @@ export function createApp(ctx: AppContext): {
   return { fetch: fetchHandler, websocket };
 }
 
-const html = (body: string) => new Response(body, { headers: { "content-type": "text/html; charset=utf-8" } });
+const html = (body: string) =>
+  new Response(body, { headers: { "content-type": "text/html; charset=utf-8" } });
