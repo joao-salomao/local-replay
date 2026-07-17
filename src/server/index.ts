@@ -47,6 +47,7 @@ const app = createApp(ctx);
 const server = Bun.serve({
   port: httpsPort,
   tls: { cert: Bun.file(certPath), key: Bun.file(keyPath) },
+  routes: app.routes,
   fetch: app.fetch,
   websocket: app.websocket,
 });

@@ -44,7 +44,12 @@ export async function createAppForTest(
     ...jobOverrides,
   });
   const app = createApp(ctx);
-  const server = Bun.serve({ port: 0, fetch: app.fetch, websocket: app.websocket });
+  const server = Bun.serve({
+    port: 0,
+    routes: app.routes,
+    fetch: app.fetch,
+    websocket: app.websocket,
+  });
   hub.onStateChanged = () =>
     server.publish(
       TOPIC_ALL,
