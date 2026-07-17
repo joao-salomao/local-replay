@@ -60,8 +60,9 @@ export class JobManager {
     };
     this.active.set(status.jobId, job);
     this.recent.unshift(status);
+    this.recent = this.recent.slice(0, 20);
     this.deps.publishRecord(status.jobId, job.t, windowSec);
-    this.deps.onUpdate(status);
+    this.deps.onUpdate({ ...status });
     return { jobId: status.jobId };
   }
 
@@ -86,9 +87,17 @@ export class JobManager {
     job.status.state = "processing";
     this.deps.onUpdate({ ...job.status });
     void this.deps.queue.push(async () => {
-      const meta = await this.process(job);
-      job.status.state = meta.state === "ready" ? "ready" : "error";
-      if (meta.state === "error") job.status.error = meta.errors.join("; ") || "processing failed";
+      let finalState: "ready" | "error" = "error";
+      let errorMsg = "";
+      try {
+        const meta = await this.process(job);
+        finalState = meta.state === "ready" ? "ready" : "error";
+        if (finalState === "error") errorMsg = meta.errors.join("; ") || "processing failed";
+      } catch (e) {
+        errorMsg = e instanceof Error ? e.message : String(e);
+      }
+      job.status.state = finalState;
+      if (finalState === "error") job.status.error = errorMsg;
       this.active.delete(jobId);
       this.deps.onUpdate({ ...job.status });
     });

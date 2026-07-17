@@ -8,17 +8,27 @@ import { JobManager } from "../../src/server/clip-job";
 import { SerialQueue } from "../../src/server/queue";
 import { Storage } from "../../src/server/storage";
 
-function setup(cameraIds: string[], processOk = true) {
+function setup(cameraIds: string[], processOk = true, writeMetaThrows = false) {
   const dir = mkdtempSync(join(tmpdir(), "replay-job-"));
   const updates: JobStatus[] = [];
+  const rawUpdates: JobStatus[] = [];
   const records: string[] = [];
+  const storage = new Storage(dir);
+  if (writeMetaThrows) {
+    storage.writeMeta = () => {
+      throw new Error("disk full");
+    };
+  }
   const manager = new JobManager({
-    storage: new Storage(dir),
+    storage,
     config: ConfigStore.load(dir),
     hub: { onlineCameraIds: () => cameraIds },
     queue: new SerialQueue(),
     publishRecord: (jobId) => records.push(jobId),
-    onUpdate: (j) => updates.push({ ...j }),
+    onUpdate: (j) => {
+      updates.push({ ...j });
+      rawUpdates.push(j);
+    },
     processFn: async () => {
       if (!processOk) throw new Error("ffmpeg exploded");
       return { outputs: { combined: "combined.mp4", angles: { a: "angle-a.mp4" } }, cameras: [], errors: [] };
@@ -26,7 +36,7 @@ function setup(cameraIds: string[], processOk = true) {
     uploadTimeoutMs: 60,
     cooldownMs: 20,
   });
-  return { manager, updates, records, dir };
+  return { manager, updates, rawUpdates, records, dir };
 }
 
 const angle = { name: "A", slug: "a", files: [{ path: "/dev/null", startMs: 0 }] };
@@ -87,5 +97,23 @@ describe("JobManager", () => {
     await waitFor(() => updates.some((u) => u.state === "ready"));
     expect(manager.addUpload(jobId, "cam1", angle)).toBe(false);
     expect(manager.uploadDir(jobId)).toBeNull();
+  });
+
+  it("finalizes to error and removes the job when writeMeta throws", async () => {
+    const { manager, updates } = setup(["cam1"], true, true);
+    const { jobId } = manager.trigger(1000) as { jobId: string };
+    manager.addUpload(jobId, "cam1", angle);
+    await waitFor(() => updates.some((u) => u.state === "error"));
+    expect(manager.addUpload(jobId, "cam1", angle)).toBe(false);
+    expect(manager.uploadDir(jobId)).toBeNull();
+  });
+
+  it("the capturing snapshot passed to onUpdate is not mutated by later transitions", async () => {
+    const { manager, updates, rawUpdates } = setup(["cam1", "cam2"]);
+    const { jobId } = manager.trigger(1000) as { jobId: string };
+    manager.addUpload(jobId, "cam1", angle);
+    manager.addUpload(jobId, "cam2", angle);
+    await waitFor(() => updates.some((u) => u.state === "ready"));
+    expect(rawUpdates[0]!.state).toBe("capturing");
   });
 });
