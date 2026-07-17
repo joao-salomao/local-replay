@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it, setDefaultTimeout } from "bun:test";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { probe, runFfmpeg } from "../../src/server/ffmpeg";
 import type { ClipMeta } from "../../src/server/storage";
 import { CameraSimulator } from "../helpers/camera-simulator";
@@ -12,16 +12,19 @@ setDefaultTimeout(240_000);
 let app: Awaited<ReturnType<typeof createAppForTest>>;
 let cookie: string;
 let raw: string;
+let dataDir: string;
+let rawDir: string;
 const sims: CameraSimulator[] = [];
 
 beforeAll(async () => {
-  const dataDir = mkdtempSync(join(tmpdir(), "replay-flow-"));
+  dataDir = mkdtempSync(join(tmpdir(), "replay-flow-"));
   writeFileSync(
     join(dataDir, "config.json"),
     JSON.stringify({ password: "senha", clipDurationSeconds: 10 }),
   );
   app = await createAppForTest(dataDir, { cooldownMs: 0 });
-  raw = join(mkdtempSync(join(tmpdir(), "replay-flow-raw-")), "raw.mp4");
+  rawDir = mkdtempSync(join(tmpdir(), "replay-flow-raw-"));
+  raw = join(rawDir, "raw.mp4");
   await runFfmpeg([
     "-hide_banner",
     "-y",
@@ -47,6 +50,8 @@ beforeAll(async () => {
 afterAll(() => {
   sims.forEach((s) => s.close());
   app.stop();
+  rmSync(dataDir, { recursive: true, force: true });
+  rmSync(rawDir, { recursive: true, force: true });
 });
 
 describe("full flow", () => {
@@ -63,7 +68,11 @@ describe("full flow", () => {
       await sim.connect();
       sims.push(sim);
     }
-    await new Promise((r) => setTimeout(r, 300)); // registration settles
+    const onlineDeadline = Date.now() + 5000;
+    while (app.ctx.hub.onlineCameraIds().length < 2) {
+      if (Date.now() > onlineDeadline) throw new Error("cameras did not come online in time");
+      await new Promise((r) => setTimeout(r, 50));
+    }
     expect(app.ctx.hub.onlineCameraIds().length).toBe(2);
 
     const trigger = await fetch(`${app.base}/api/record`, { method: "POST", headers: { cookie } });
@@ -86,6 +95,7 @@ describe("full flow", () => {
     const filePath = join(app.ctx.dataDir, clips[0]!.dir, "combined.mp4");
     const info = await probe(filePath);
     expect(info.width).toBe(1920);
+    expect(info.height).toBe(1080);
     expect(info.durationSec).toBeGreaterThan(17); // 2 angles × ~10s sequential
     expect(info.durationSec).toBeLessThan(22);
 
