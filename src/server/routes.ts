@@ -56,37 +56,45 @@ export function createApp(ctx: AppContext) {
     (req: any, server: Server<WSData>) =>
       isAuthed(req) ? handler(req, server) : Response.redirect("/", 302);
 
-  const pageRoute = (name: PageName) => requireAuthPage(() => html(ctx.pages.html(name)));
+  const pageRoute = (name: PageName) => ({
+    GET: requireAuthPage(() => html(ctx.pages.html(name))),
+  });
 
   const routes = {
-    "/": () => html(ctx.pages.html("login")),
+    "/": { GET: () => html(ctx.pages.html("login")) },
     "/camera": pageRoute("camera"),
     "/control": pageRoute("control"),
     "/clips": pageRoute("clips"),
 
-    "/assets/:name": (req: BunRequest<"/assets/:name">) => {
-      const file = ctx.pages.assetFile(req.params.name);
-      if (!file) return json({ error: "not found" }, 404);
-      const type = file.endsWith(".css") ? "text/css" : "application/javascript";
-      return new Response(Bun.file(file), { headers: { "content-type": type } });
+    "/assets/:name": {
+      GET: (req: BunRequest<"/assets/:name">) => {
+        const file = ctx.pages.assetFile(req.params.name);
+        if (!file) return json({ error: "not found" }, 404);
+        const type = file.endsWith(".css") ? "text/css" : "application/javascript";
+        return new Response(Bun.file(file), { headers: { "content-type": type } });
+      },
     },
 
-    "/cert": () => {
-      const certPath = join(ctx.dataDir, "certs", "cert.pem");
-      if (!existsSync(certPath)) return json({ error: "not found" }, 404);
-      return new Response(Bun.file(certPath), {
-        headers: {
-          "content-type": "application/x-x509-ca-cert",
-          "content-disposition": 'attachment; filename="replay-local.crt"',
-        },
-      });
+    "/cert": {
+      GET: () => {
+        const certPath = join(ctx.dataDir, "certs", "cert.pem");
+        if (!existsSync(certPath)) return json({ error: "not found" }, 404);
+        return new Response(Bun.file(certPath), {
+          headers: {
+            "content-type": "application/x-x509-ca-cert",
+            "content-disposition": 'attachment; filename="replay-local.crt"',
+          },
+        });
+      },
     },
 
-    "/ws": requireAuth((req, server) =>
-      server.upgrade(req, { data: {} as WSData })
-        ? undefined
-        : json({ error: "upgrade failed" }, 400),
-    ),
+    "/ws": {
+      GET: requireAuth((req, server) =>
+        server.upgrade(req, { data: {} as WSData })
+          ? undefined
+          : json({ error: "upgrade failed" }, 400),
+      ),
+    },
 
     "/api/login": {
       POST: async (req: Request, server: Server<WSData>) => {
