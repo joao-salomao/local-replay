@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it, setDefaultTimeout } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { probe, runFfmpeg } from "../../src/server/ffmpeg";
 import type { ClipMeta } from "../../src/server/storage";
 import { CameraSimulator } from "../helpers/camera-simulator";
