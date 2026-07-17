@@ -62,7 +62,7 @@ Multi-quadra, contas de usuário individuais, upload para nuvem, integração Wh
 
 1. **`/` (entrada):** pede a senha, cria sessão, oferece os papéis: **"Ser câmera"** e **"Controlar gravação"**, mais link para a galeria.
 2. **`/camera`:** transforma o celular em câmera fixa (tripé): preview, buffer rolante, aguarda sinal GRAVAR via WebSocket. Mostra status (conectado / bufferizando / enviando). A pessoa nomeia o ângulo ("Fundo", "Lateral rede"...) — persiste em `localStorage`.
-3. **`/control`:** botão GRAVAR gigante + seletor de duração do clipe (10/20/30/45/60s) + lista de câmeras online + status do último lance (capturando → processando → pronto) + QR code de entrada no sistema.
+3. **`/control`:** botão GRAVAR gigante + seletor de duração do clipe (10/20/30/45/60s) + lista de câmeras online (cada uma com resolução/fps atuais) + status do último lance (capturando → processando → pronto) + QR code de entrada no sistema.
 4. **`/clips`:** galeria dos clipes (mais recente primeiro), player, download, botão **Compartilhar** (share sheet nativo via Web Share API, com fallback para download) e QR code por clipe apontando para o arquivo do vídeo.
 
 ### Fluxo de um lance (fim a fim)
@@ -76,7 +76,7 @@ Multi-quadra, contas de usuário individuais, upload para nuvem, integração Wh
 
 ## Página câmera — buffer rolante no celular
 
-**Captura.** `getUserMedia` com câmera traseira solicitando **1080p@60fps** via constraint `ideal` — aparelhos que não entregam 60fps no navegador caem para 30fps automaticamente, e quem não aguenta 1080p cai para 720p. `MediaRecorder` com chunks de 1s e bitrate alvo de ~10–12 Mbps em 60fps (~6 Mbps em 30fps). Áudio capturado por padrão. A página mostra a resolução/fps reais obtidos, para o operador saber o que cada celular está entregando.
+**Captura.** `getUserMedia` com câmera traseira solicitando **1080p@60fps** via constraint `ideal` — aparelhos que não entregam 60fps no navegador caem para 30fps automaticamente, e quem não aguenta 1080p cai para 720p. `MediaRecorder` com chunks de 1s e bitrate alvo de ~10–12 Mbps em 60fps (~6 Mbps em 30fps). Áudio capturado por padrão. A página mostra a resolução/fps reais obtidos — **relidos a cada 5s durante a gravação** (aquecimento pode derrubar o fps ao longo da sessão) — e reporta ao servidor, que exibe o valor de cada câmera na lista do `/control`.
 
 **Buffer rolante por ciclos.** Chunks de `MediaRecorder` só são decodáveis a partir do início do arquivo, então o esquema é: reiniciar o gravador a cada **ciclo** e manter em memória o **arquivo do ciclo anterior (completo) + o atual (crescendo)**. Cobertura garantida = 1 ciclo inteiro, mesmo logo após um reinício.
 

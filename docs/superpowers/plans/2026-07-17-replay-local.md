@@ -1421,10 +1421,12 @@ export class Hub {
     const wasOffline = !cam.info.online;
     cam.info.online = true;
     if (msg.type === "cameraStatus") {
+      const changed =
+        wasOffline || cam.info.width !== msg.width || cam.info.height !== msg.height || cam.info.fps !== msg.fps;
       cam.info.width = msg.width;
       cam.info.height = msg.height;
       cam.info.fps = msg.fps;
-      this.onStateChanged();
+      if (changed) this.onStateChanged(); // cameras re-report every 5s; only broadcast real changes
     } else if (wasOffline) {
       this.onStateChanged();
     }
@@ -2609,7 +2611,7 @@ git commit -m "feat: shared web client, stylesheet and login page"
 - Consumes: `WsClient` (Task 12), `selectFilesForWindow`, `cycleSeconds` (Task 3), protocol types (Task 2), upload route (Task 11).
 - Produces: browser-only page; no exports. Verified by Playwright in Task 17.
 - Behavior contract: request rear camera 1080p60 (`ideal` constraints, `audio: true`; on audio failure retry video-only); pick the first supported `MediaRecorder` mime from `["video/mp4;codecs=avc1","video/webm;codecs=h264,opus","video/webm;codecs=vp8,opus","video/webm","video/mp4"]` (iPhone lands on MP4/H.264, Android on WebM); bitrate 12 Mbps when actual fps ≥ 50 else 6 Mbps; rolling buffer = previous finalized file + current recorder (cycle = `cycleSeconds(clipDurationSeconds, 30)`, restarted when the server pushes a new duration); on `record` message stop the current recorder (clean finalize), immediately start the next cycle, then upload the files overlapping `[t − windowSec·1000, t]` with 3 retries (1s/2s/4s backoff); wake lock requested and re-acquired on visibility, with a red banner after any hidden period; angle name persisted in `localStorage["angleName"]`.
-- Platform contract (iOS/Android): iOS kills the camera stream in background — on return (or on `track.onended`) the page runs `recoverStream()`: detach old recorder handlers, stop tracks, fresh `getUserMedia`, restart cycle. Multi-lens phones get a camera selector (`enumerateDevices`; switching lens = `recoverStream()` with `deviceId: {exact}` — ultrawide is great for framing the whole court). A hint "↔️ Vire o celular para a horizontal" shows while in portrait. The fps readout appends "(60fps é melhor esforço — varia por aparelho)" because many phones cap browser capture at 30fps. Safari may fire few `dataavailable` events with timeslice — harmless: only the finalized blob at `onstop` is used.
+- Platform contract (iOS/Android): iOS kills the camera stream in background — on return (or on `track.onended`) the page runs `recoverStream()`: detach old recorder handlers, stop tracks, fresh `getUserMedia`, restart cycle. Multi-lens phones get a camera selector (`enumerateDevices`; switching lens = `recoverStream()` with `deviceId: {exact}` — ultrawide is great for framing the whole court). A hint "↔️ Vire o celular para a horizontal" shows while in portrait. The fps readout appends "(60fps é melhor esforço — varia por aparelho)" because many phones cap browser capture at 30fps, and `reportStatus()` re-runs every 5s while recording (thermal throttling changes fps mid-session) — the badge and the control page stay live. Safari may fire few `dataavailable` events with timeslice — harmless: only the finalized blob at `onstop` is used.
 - UI copy (exact): name placeholder "Nome do ângulo (ex: Fundo)"; start button "Iniciar câmera"; status lines "Conectado"/"Desconectado", "Bufferizando últimos {N}s", "Enviando lance..."; banner "⚠️ A tela ficou oculta — buffer reiniciado. Mantenha esta página aberta e o celular na tomada."
 
 - [ ] **Step 1: Implement the html**
@@ -2872,6 +2874,7 @@ $("start").onclick = async () => {
   const updateOrientHint = () => ($("orient-hint").hidden = !portrait.matches);
   portrait.addEventListener("change", updateOrientHint);
   updateOrientHint();
+  setInterval(reportStatus, 5_000); // fps/resolution drift with heat — keep badge and control live
 };
 
 $<HTMLInputElement>("angle-name").value = localStorage.getItem("angleName") ?? "";
