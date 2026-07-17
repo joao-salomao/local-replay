@@ -29,4 +29,10 @@ describe("ensureCert", () => {
     expect(readFileSync(third.certPath, "utf8")).toBe(readFileSync(second.certPath, "utf8"));
     delete process.env.HOST_LAN_IP;
   }, 30_000);
+
+  it("writes the private key with owner-only permissions", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "replay-cert-"));
+    const { keyPath } = await ensureCert(dir);
+    expect(statSync(keyPath).mode & 0o777).toBe(0o600);
+  }, 30_000);
 });

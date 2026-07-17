@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 export async function ensureCert(dataDir: string): Promise<{ certPath: string; keyPath: string }> {
@@ -27,6 +27,8 @@ export async function ensureCert(dataDir: string): Promise<{ certPath: string; k
       throw new Error(`openssl failed: ${await new Response(proc.stderr).text()}`);
     }
     writeFileSync(ipMarker, wantedIp);
+    chmodSync(keyPath, 0o600);
+    chmodSync(dir, 0o700);
   }
   return { certPath, keyPath };
 }
