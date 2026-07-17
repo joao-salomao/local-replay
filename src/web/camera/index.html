@@ -1,1 +1,28 @@
-<!doctype html><title>stub</title><script type="module" src="/assets/camera.js"></script>
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Câmera — Replay Local</title>
+  <link rel="stylesheet" href="/assets/app.css" />
+</head>
+<body>
+  <h1>📷 Câmera</h1>
+  <div class="banner" id="hidden-banner" hidden>⚠️ A tela ficou oculta — buffer reiniciado. Mantenha esta página aberta e o celular na tomada.</div>
+  <div class="card" id="setup">
+    <input id="angle-name" placeholder="Nome do ângulo (ex: Fundo)" />
+    <div style="height:8px"></div>
+    <button id="start">Iniciar câmera</button>
+    <div class="error" id="camera-error"></div>
+  </div>
+  <div class="card" id="live" hidden>
+    <video id="preview" autoplay muted playsinline></video>
+    <p class="muted" id="orient-hint" hidden>↔️ Vire o celular para a horizontal</p>
+    <select id="camera-select" hidden></select>
+    <p class="row"><span class="status-dot" id="conn-dot"></span><span id="conn-text">Desconectado</span></p>
+    <p class="muted" id="media-info"></p>
+    <p id="buffer-status" class="muted"></p>
+  </div>
+  <script type="module" src="/assets/camera.js"></script>
+</body>
+</html>
