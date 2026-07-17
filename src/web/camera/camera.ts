@@ -19,10 +19,9 @@ let stream: MediaStream;
 let mimeType = "";
 let clipDurationSeconds = 20;
 let recorder: MediaRecorder | null = null;
-let chunks: Blob[] = [];
-let currentStartMs = 0;
 let files: BufferedFile[] = []; // previous + just-finalized, max 2
 let cycleTimer = 0;
+let cycleGen = 0;
 let pendingRecord: { jobId: string; t: number; windowSec: number } | null = null;
 let wakeLock: { release(): Promise<void> } | null = null;
 let wasHidden = false;
@@ -87,8 +86,9 @@ async function populateCameraSelect(): Promise<void> {
 }
 
 function startCycle(): void {
-  chunks = [];
-  currentStartMs = ws.serverNow();
+  const gen = ++cycleGen;
+  const localChunks: Blob[] = [];
+  const startMs = ws.serverNow();
   const settings = stream.getVideoTracks()[0]!.getSettings();
   const rec = new MediaRecorder(stream, {
     mimeType,
@@ -96,45 +96,69 @@ function startCycle(): void {
   });
   recorder = rec;
   rec.ondataavailable = (e) => {
-    if (e.data.size > 0) chunks.push(e.data);
+    if (e.data.size > 0) localChunks.push(e.data);
   };
   rec.onstop = () => {
     const file: BufferedFile = {
-      blob: new Blob(chunks, { type: mimeType }),
+      blob: new Blob(localChunks, { type: mimeType }),
       mimeType,
-      startMs: currentStartMs,
-      durationMs: ws.serverNow() - currentStartMs,
+      startMs,
+      durationMs: ws.serverNow() - startMs,
     };
-    files = [...files.slice(-1), file];
     const record = pendingRecord;
     pendingRecord = null;
-    startCycle(); // next cycle starts immediately; the gap stays after T
-    if (record) void uploadClip(record);
+    if (gen === cycleGen) {
+      // We are still the current cycle: append to the shared buffer and roll forward.
+      files = [...files.slice(-1), file];
+      startCycle();
+      if (record) void uploadClip(record, files);
+    } else {
+      // Superseded by a newer cycle: do NOT touch the shared buffer or start a competing cycle.
+      // Still honor a triggered upload (best-effort) so a "lance" is never silently dropped.
+      if (record) void uploadClip(record, [...files, file]);
+    }
   };
   rec.start(1000);
   clearTimeout(cycleTimer);
-  cycleTimer = window.setTimeout(() => rec.state === "recording" && rec.stop(), cycleSeconds(clipDurationSeconds, 30) * 1000);
+  cycleTimer = window.setTimeout(() => {
+    if (rec.state === "recording") rec.stop();
+  }, cycleSeconds(clipDurationSeconds, 30) * 1000);
   $("buffer-status").textContent = `Bufferizando últimos ${clipDurationSeconds}s`;
 }
 
-async function uploadClip(record: { jobId: string; t: number; windowSec: number }): Promise<void> {
+async function uploadClip(
+  record: { jobId: string; t: number; windowSec: number },
+  sourceFiles: BufferedFile[],
+): Promise<void> {
   $("buffer-status").textContent = "Enviando lance...";
   const windowStartMs = record.t - record.windowSec * 1000;
-  const selected = selectFilesForWindow(files, windowStartMs, record.t);
+  const selected = selectFilesForWindow(sourceFiles, windowStartMs, record.t);
   const form = new FormData();
   form.append("cameraId", cameraId);
   form.append("angleName", localStorage.getItem("angleName") ?? "Camera");
   form.append("filesMeta", JSON.stringify(selected.map((f) => ({ startMs: f.startMs, mimeType: f.mimeType }))));
   selected.forEach((f, i) => form.append(`file${i}`, f.blob, `part${i}`));
+  let outcome: "ok" | "notFound" | "failed" = "failed";
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
       const res = await fetch(`/api/clips/${record.jobId}/upload`, { method: "POST", body: form });
-      if (res.ok) break;
-      if (res.status === 404) break; // job finalized without us
+      if (res.ok) {
+        outcome = "ok";
+        break;
+      }
+      if (res.status === 404) {
+        outcome = "notFound"; // job finalized without us
+        break;
+      }
       throw new Error(`HTTP ${res.status}`);
     } catch {
-      await new Promise((r) => setTimeout(r, 1000 * 2 ** attempt));
+      if (attempt < 2) await new Promise((r) => setTimeout(r, 1000 * 2 ** attempt));
     }
+  }
+  if (outcome === "ok") {
+    $("upload-error").textContent = "";
+  } else if (outcome === "failed") {
+    $("upload-error").textContent = "Falha ao enviar o lance. Verifique o Wi‑Fi.";
   }
   $("buffer-status").textContent = `Bufferizando últimos ${clipDurationSeconds}s`;
 }
