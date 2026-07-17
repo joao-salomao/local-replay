@@ -27,5 +27,11 @@ export type ServerMessage =
   | { type: "registered"; cameraId: string }
   | { type: "ntpReply"; clientTime: number; serverTime: number }
   | { type: "record"; jobId: string; t: number; windowSec: number }
-  | { type: "state"; cameras: CameraInfo[]; clipDurationSeconds: number; jobs: JobStatus[] }
+  | {
+      type: "state";
+      cameras: CameraInfo[];
+      clipDurationSeconds: number;
+      jobs: JobStatus[];
+      freeDiskGB: number | null;
+    }
   | { type: "jobUpdate"; job: JobStatus };

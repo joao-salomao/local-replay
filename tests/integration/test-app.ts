@@ -53,6 +53,7 @@ export async function createAppForTest(
         cameras: hub.cameras(),
         clipDurationSeconds: config.value.clipDurationSeconds,
         jobs: ctx.jobs.jobs(),
+        freeDiskGB: storage.freeDiskGB(),
       } satisfies ServerMessage),
     );
   return {

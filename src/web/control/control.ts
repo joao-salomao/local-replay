@@ -11,6 +11,12 @@ type State = {
 const DURATIONS = [10, 20, 30, 45, 60];
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
+const esc = (s: string) =>
+  s.replace(
+    /[&<>"']/g,
+    (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]!,
+  );
+
 function jobLabel(job: JobStatus): string {
   if (job.state === "capturing") return `Lance #${job.clipNumber} — capturando...`;
   if (job.state === "processing") return `Lance #${job.clipNumber} — processando...`;
@@ -22,16 +28,20 @@ let state: State = { cameras: [], clipDurationSeconds: 20, jobs: [] };
 
 function render(): void {
   const online = state.cameras.filter((c) => c.online);
-  if (typeof state.freeDiskGB === "number" && state.freeDiskGB < 5) {
-    $("disk-banner").hidden = false;
+  const low = typeof state.freeDiskGB === "number" && state.freeDiskGB < 5;
+  $("disk-banner").hidden = !low;
+  if (low) {
     $("disk-banner").textContent =
-      `⚠️ Pouco espaço em disco (${state.freeDiskGB.toFixed(1)} GB livres)`;
+      `⚠️ Pouco espaço em disco (${state.freeDiskGB!.toFixed(1)} GB livres)`;
   }
   $("cam-count").textContent = `${online.length} câmera(s) online`;
   $("cam-hint").hidden = online.length > 0;
   $<HTMLButtonElement>("record").disabled = online.length === 0;
   $("cam-list").innerHTML = state.cameras
-    .map((c) => `<li>${c.online ? "🟢" : "🔴"} ${c.name} — ${c.width}×${c.height}@${c.fps}fps</li>`)
+    .map(
+      (c) =>
+        `<li>${c.online ? "🟢" : "🔴"} ${esc(c.name)} — ${c.width}×${c.height}@${c.fps}fps</li>`,
+    )
     .join("");
   $("durations").innerHTML = DURATIONS.map(
     (d) =>
@@ -78,12 +88,13 @@ ws.onMessage = (msg: ServerMessage) => {
       cameras: msg.cameras,
       clipDurationSeconds: msg.clipDurationSeconds,
       jobs: msg.jobs,
+      freeDiskGB: msg.freeDiskGB,
     };
     render();
   }
   if (msg.type === "jobUpdate") {
     const rest = state.jobs.filter((j) => j.jobId !== msg.job.jobId);
-    state.jobs = [msg.job, ...rest].sort((a, b) => b.createdAt - a.createdAt);
+    state.jobs = [msg.job, ...rest].sort((a, b) => b.createdAt - a.createdAt).slice(0, 20);
     render();
   }
 };

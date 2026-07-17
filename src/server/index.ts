@@ -57,6 +57,7 @@ function publishState(): void {
     cameras: hub.cameras(),
     clipDurationSeconds: config.value.clipDurationSeconds,
     jobs: ctx.jobs.jobs(),
+    freeDiskGB: storage.freeDiskGB(),
   };
   server.publish(TOPIC_ALL, JSON.stringify(state));
 }
