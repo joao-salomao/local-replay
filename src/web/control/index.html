@@ -1,1 +1,33 @@
-<!doctype html><title>stub</title><script type="module" src="/assets/control.js"></script>
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Controle — Replay Local</title>
+  <link rel="stylesheet" href="/assets/app.css" />
+</head>
+<body>
+  <h1>🔴 Controle</h1>
+  <div class="banner" id="disk-banner" hidden></div>
+  <div class="card">
+    <button id="record" class="record-btn danger" disabled>GRAVAR</button>
+    <div class="error" id="record-error"></div>
+    <p class="row"><span class="status-dot" id="conn-dot"></span><span id="cam-count">0 câmera(s) online</span></p>
+    <p class="muted" id="cam-hint" hidden>Nenhuma câmera online — abra /camera em um celular</p>
+    <ul id="cam-list" class="muted"></ul>
+  </div>
+  <div class="card">
+    <p class="muted">Duração do clipe</p>
+    <div class="seg" id="durations"></div>
+  </div>
+  <div class="card">
+    <p class="muted">Últimos lances</p>
+    <ul id="jobs"></ul>
+  </div>
+  <div class="card">
+    <p class="muted">Entrar no sistema</p>
+    <img id="qr" alt="QR code" style="width:100%;max-width:240px;background:#fff;border-radius:8px" />
+  </div>
+  <script type="module" src="/assets/control.js"></script>
+</body>
+</html>
