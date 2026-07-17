@@ -56,6 +56,36 @@ describe("Hub", () => {
     expect(hub.cameras()[0]!.online).toBe(true);
   });
 
+  it("fires onStateChanged only for real status changes (5s re-reports are suppressed)", () => {
+    const hub = new Hub();
+    const { ws } = fakeWs();
+    hub.open(ws);
+    hub.message(ws, JSON.stringify({ type: "register", role: "camera", name: "A" }), 0);
+    let changes = 0;
+    hub.onStateChanged = () => changes++;
+
+    hub.message(ws, JSON.stringify({ type: "cameraStatus", width: 1920, height: 1080, fps: 60 }), 1000);
+    expect(changes).toBe(1); // first real values fire
+
+    hub.message(ws, JSON.stringify({ type: "cameraStatus", width: 1920, height: 1080, fps: 60 }), 2000);
+    expect(changes).toBe(1); // identical re-report: suppressed
+
+    hub.message(ws, JSON.stringify({ type: "cameraStatus", width: 1920, height: 1080, fps: 30 }), 3000);
+    expect(changes).toBe(2); // fps changed: fires
+
+    hub.message(ws, JSON.stringify({ type: "hb" }), 4000);
+    expect(changes).toBe(2); // hb while online: no fire
+
+    hub.sweep(4000 + OFFLINE_AFTER_MS + 1);
+    expect(changes).toBe(3); // went offline: fires once
+
+    hub.message(ws, JSON.stringify({ type: "hb" }), 20_000);
+    expect(changes).toBe(4); // hb revives offline camera: fires
+
+    hub.sweep(20_001);
+    expect(changes).toBe(4); // sweep with nothing changed: no fire
+  });
+
   it("removes a camera on close and ignores malformed json", () => {
     const hub = new Hub();
     const { ws } = fakeWs();
