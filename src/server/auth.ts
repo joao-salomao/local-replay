@@ -30,7 +30,9 @@ export class Auth {
     const [exp, sig] = token.split(".");
     if (!exp || !sig || !/^\d+$/.test(exp) || Number(exp) < nowMs) return false;
     const good = this.sign(exp);
-    return sig.length === good.length && timingSafeEqual(Buffer.from(sig), Buffer.from(good));
+    const sigBuf = Buffer.from(sig);
+    const goodBuf = Buffer.from(good);
+    return sigBuf.length === goodBuf.length && timingSafeEqual(sigBuf, goodBuf);
   }
 
   cookieFor(token: string): string {

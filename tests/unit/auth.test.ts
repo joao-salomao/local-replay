@@ -25,6 +25,12 @@ describe("Auth", () => {
     expect(auth.verify("garbage", 0)).toBe(false);
   });
 
+  it("returns false (not throw) for a multi-byte signature with equal string length", () => {
+    const auth = Auth.load(tmp(), () => "s");
+    const [exp] = auth.login("s", 0)!.split(".");
+    expect(auth.verify(`${exp}.${"é" + "0".repeat(63)}`, 0)).toBe(false);
+  });
+
   it("persists the secret so tokens survive a restart", () => {
     const dir = tmp();
     const token = Auth.load(dir, () => "s").login("s", 0)!;
