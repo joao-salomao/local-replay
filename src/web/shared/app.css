@@ -1,0 +1,21 @@
+* { box-sizing: border-box; margin: 0; }
+body { font-family: system-ui, sans-serif; background: #0d1117; color: #e6edf3; min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 16px; }
+h1 { font-size: 1.3rem; margin: 12px 0; }
+.card { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 16px; width: 100%; max-width: 460px; margin-bottom: 12px; }
+input, select { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #30363d; background: #0d1117; color: inherit; font-size: 1rem; }
+button { width: 100%; padding: 14px; border: 0; border-radius: 10px; background: #238636; color: #fff; font-size: 1.1rem; font-weight: 600; cursor: pointer; }
+button:disabled { background: #30363d; cursor: not-allowed; }
+button.danger { background: #da3633; }
+.row { display: flex; gap: 8px; align-items: center; }
+.muted { color: #8b949e; font-size: .85rem; }
+.error { color: #ff7b72; margin-top: 8px; min-height: 1.2em; }
+.banner { background: #6e2c00; border: 1px solid #f0883e; border-radius: 8px; padding: 10px; margin-bottom: 10px; width: 100%; max-width: 460px; }
+video { width: 100%; border-radius: 8px; background: #000; }
+.status-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #f85149; }
+.status-dot.on { background: #3fb950; }
+.record-btn { font-size: 1.6rem; padding: 28px; border-radius: 16px; }
+.seg { display: flex; gap: 6px; }
+.seg button { padding: 10px 0; font-size: .95rem; background: #21262d; }
+.seg button.active { background: #238636; }
+.clip-card video { margin-bottom: 8px; }
+a.dl { color: #58a6ff; margin-right: 12px; text-decoration: none; }

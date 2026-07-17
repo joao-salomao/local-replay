@@ -1,1 +1,37 @@
-<!doctype html><title>stub</title><script type="module" src="/assets/login.js"></script>
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Replay Local</title>
+  <link rel="stylesheet" href="/assets/app.css" />
+</head>
+<body>
+  <h1>🏐 Replay Local</h1>
+  <div class="card" id="login-card">
+    <form id="login-form">
+      <input id="password" type="password" placeholder="Senha" autocomplete="current-password" required />
+      <div class="error" id="login-error"></div>
+      <button type="submit">Entrar</button>
+    </form>
+  </div>
+  <div class="card" id="roles" hidden>
+    <button id="go-camera">📷 Ser câmera</button>
+    <div style="height:8px"></div>
+    <button id="go-control" class="danger">🔴 Controlar gravação</button>
+    <div style="height:8px"></div>
+    <button id="go-clips" style="background:#1f6feb">🎬 Ver lances</button>
+  </div>
+  <details class="card">
+    <summary class="muted">Problemas para conectar no iPhone?</summary>
+    <p class="muted" style="margin-top:8px">
+      No iPhone, o aviso de segurança pode não bastar para a conexão em tempo real.
+      1) Baixe o <a href="/cert" style="color:#58a6ff">certificado</a>.
+      2) Instale em Ajustes → Geral → VPN e Gerenciamento de Dispositivo.
+      3) Ative em Ajustes → Geral → Sobre → Confiança de Certificado.
+      No Android, basta tocar em "Avançado → Continuar" no aviso do navegador.
+    </p>
+  </details>
+  <script type="module" src="/assets/login.js"></script>
+</body>
+</html>
