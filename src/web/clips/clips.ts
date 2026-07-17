@@ -19,6 +19,8 @@ const esc = (s: string) =>
     (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]!,
   );
 
+let lastSignature = "";
+
 function card(clip: ClipEntry): string {
   const nameBySlug = new Map(clip.cameras.map((c) => [c.slug, c.name]));
   const src = clip.outputs.combined ?? Object.values(clip.outputs.angles)[0];
@@ -73,14 +75,27 @@ function wireShareButtons(): void {
 async function load(): Promise<void> {
   const clips = await api<ClipEntry[]>("/api/clips");
   const ready = clips.filter((c) => c.state !== "processing");
-  $("empty").hidden = ready.length > 0;
-  $("list").innerHTML = ready.map(card).join("");
-  wireShareButtons();
+  const cards = ready.map(card).filter((html) => html !== "");
+  const signature = JSON.stringify(
+    ready.map((c) => [
+      c.clipNumber,
+      c.state,
+      c.outputs.combined,
+      Object.keys(c.outputs.angles).length,
+    ]),
+  );
+  if (signature !== lastSignature) {
+    lastSignature = signature;
+    $("empty").hidden = cards.length > 0;
+    $("list").innerHTML = cards.join("");
+    wireShareButtons();
+  }
   const state = await api<{ freeDiskGB: number | null }>("/api/state");
-  if (state.freeDiskGB !== null && state.freeDiskGB < 5) {
-    $("disk-banner").hidden = false;
+  const low = typeof state.freeDiskGB === "number" && state.freeDiskGB < 5;
+  $("disk-banner").hidden = !low;
+  if (low) {
     $("disk-banner").textContent =
-      `⚠️ Pouco espaço em disco (${state.freeDiskGB.toFixed(1)} GB livres)`;
+      `⚠️ Pouco espaço em disco (${state.freeDiskGB!.toFixed(1)} GB livres)`;
   }
 }
 
