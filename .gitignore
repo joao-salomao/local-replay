@@ -4,6 +4,7 @@ data/
 .DS_Store
 .idea/
 .superpowers/
+.env
 .e2e-data/
 .e2e-data-buffer/
 /test-results/
