@@ -1,3 +1,4 @@
+#!/usr/bin/env sh
 # Pre-push gate: biome (format + lint + import order), TypeScript, then the unit + integration
 # suite. Any step failing aborts the push. Bypass in an emergency with `git push --no-verify`.
 bun run check &&
