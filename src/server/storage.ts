@@ -15,7 +15,7 @@ const log = logger("storage");
 
 /**
  * Filesystem-backed clip storage: `<dataDir>/clips/<YYYY-MM-DD>/clip-<NNN>/{raw/,meta.json,
- * angle-*.mp4,combined.mp4}`. `meta.json` is the source of truth for a clip's existence and
+ * angle-*.mp4,combined.mp4,combined-side-by-side.mp4}`. `meta.json` is the source of truth for a clip's existence and
  * state — `listClips` discovers clips purely by scanning for it (see `clip-job.ts` for why it's
  * always written, even for a failed job).
  */
