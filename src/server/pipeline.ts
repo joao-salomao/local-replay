@@ -10,7 +10,10 @@ import {
   runFfmpeg,
   writeConcatList,
 } from "./ffmpeg";
+import { logger } from "./log";
 import type { ClipCamera, ClipOutputs } from "./storage";
+
+const log = logger("ffmpeg");
 
 export type RawAngle = { name: string; slug: string; files: { path: string; startMs: number }[] };
 
@@ -70,19 +73,20 @@ export async function processClip(o: {
         input = probed[0]!.path;
       }
       const outName = `angle-${uniqueSlug}.mp4`;
-      await runFfmpeg(
-        normalizeCutArgs({
-          listFile,
-          input,
-          startSec: cut.startSec,
-          durationSec: cut.durationSec,
-          width,
-          height: config.targetHeight,
-          fps: config.targetFps,
-          hasAudio,
-          output: join(clipDir, outName),
-        }),
-      );
+      const cutArgs = normalizeCutArgs({
+        listFile,
+        input,
+        startSec: cut.startSec,
+        durationSec: cut.durationSec,
+        width,
+        height: config.targetHeight,
+        fps: config.targetFps,
+        hasAudio,
+        output: join(clipDir, outName),
+      });
+      log.debug("ffmpeg cmd", { slug: uniqueSlug, cmd: cutArgs.join(" ") });
+      await runFfmpeg(cutArgs);
+      log.debug("angle normalized", { slug: uniqueSlug });
       outputs.angles[uniqueSlug] = outName;
       anglePaths.push(join(clipDir, outName));
       cameras.push({
@@ -91,7 +95,9 @@ export async function processClip(o: {
         files: probed.map(({ startMs, durationMs }) => ({ startMs, durationMs })),
       });
     } catch (e) {
-      errors.push(`angle ${angle.slug}: ${e instanceof Error ? e.message : String(e)}`);
+      const message = e instanceof Error ? e.message : String(e);
+      log.warn("angle failed", { slug: angle.slug, error: message });
+      errors.push(`angle ${angle.slug}: ${message}`);
     }
   }
 
@@ -100,20 +106,24 @@ export async function processClip(o: {
     outputs.combined = "combined.mp4";
   } else if (anglePaths.length >= 2) {
     const out = join(clipDir, "combined.mp4");
+    log.info("combine start", { angles: anglePaths.length, layout: config.layout });
     if (config.layout === "side-by-side") {
-      await runFfmpeg(
-        combineSideBySideArgs(
-          [anglePaths[0]!, anglePaths[1]!],
-          { width, height: config.targetHeight, fps: config.targetFps },
-          out,
-        ),
+      const combineArgs = combineSideBySideArgs(
+        [anglePaths[0]!, anglePaths[1]!],
+        { width, height: config.targetHeight, fps: config.targetFps },
+        out,
       );
+      log.debug("ffmpeg cmd", { cmd: combineArgs.join(" ") });
+      await runFfmpeg(combineArgs);
     } else {
       const listFile = join(clipDir, "raw", "combined-list.txt");
       writeConcatList(anglePaths, listFile);
-      await runFfmpeg(combineSequentialArgs(listFile, out));
+      const combineArgs = combineSequentialArgs(listFile, out);
+      log.debug("ffmpeg cmd", { cmd: combineArgs.join(" ") });
+      await runFfmpeg(combineArgs);
     }
     outputs.combined = "combined.mp4";
+    log.info("combine done", { output: out });
   }
 
   return { outputs, cameras, errors };

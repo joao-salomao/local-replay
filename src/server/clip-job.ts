@@ -1,9 +1,12 @@
 import type { JobStatus } from "../shared/protocol";
 import type { ConfigStore } from "./config";
 import type { Hub } from "./hub";
+import { logger } from "./log";
 import { processClip, type RawAngle } from "./pipeline";
 import type { SerialQueue } from "./queue";
 import type { ClipMeta, Storage } from "./storage";
+
+const log = logger("job");
 
 export type TriggerResult = { jobId: string } | { error: "cooldown" | "no-cameras" };
 
@@ -71,6 +74,12 @@ export class JobManager {
     this.recent = this.recent.slice(0, 20);
     this.deps.publishRecord(status.jobId, job.t, windowSec);
     this.deps.onUpdate({ ...status });
+    log.info("trigger", {
+      jobId: status.jobId,
+      clipNumber,
+      windowSec,
+      cameras: cameraIds.length,
+    });
     return { jobId: status.jobId };
   }
 
@@ -85,6 +94,7 @@ export class JobManager {
     if (job.delivered.has(cameraId)) return true; // idempotent: this camera already delivered
     job.angles.push(angle);
     job.delivered.add(cameraId);
+    log.debug("upload added", { jobId, cameraId });
     if ([...job.expected].every((id) => job.delivered.has(id))) this.finalize(jobId);
     return true;
   }
@@ -94,6 +104,7 @@ export class JobManager {
     if (!job || job.status.state !== "capturing") return;
     clearTimeout(job.timer);
     job.status.state = "processing";
+    log.info("processing", { jobId });
     this.deps.onUpdate({ ...job.status });
     void this.deps.queue.push(async () => {
       let finalState: "ready" | "error" = "error";
@@ -108,6 +119,11 @@ export class JobManager {
       job.status.state = finalState;
       if (finalState === "error") job.status.error = errorMsg;
       this.active.delete(jobId);
+      if (finalState === "ready") {
+        log.info("ready", { jobId, clipNumber: job.status.clipNumber, angles: job.angles.length });
+      } else {
+        log.error("job failed", { jobId, error: errorMsg });
+      }
       this.deps.onUpdate({ ...job.status });
     });
   }

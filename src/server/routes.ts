@@ -7,9 +7,12 @@ import { tokenFromCookie } from "./auth";
 import type { JobManager } from "./clip-job";
 import type { ConfigStore } from "./config";
 import { Hub, type WSData } from "./hub";
+import { logger } from "./log";
 import type { PageAssets, PageName } from "./pages";
 import { slugify } from "./pipeline";
 import type { Storage } from "./storage";
+
+const log = logger("http");
 
 export type AppContext = {
   dataDir: string;
@@ -105,14 +108,20 @@ export function createApp(ctx: AppContext) {
           ? req.headers.get("x-forwarded-for")?.split(",").pop()?.trim() || "unknown"
           : (server.requestIP(req)?.address ?? "unknown");
 
-        if (!ctx.loginLimiter.allow(ip, Date.now()))
+        if (!ctx.loginLimiter.allow(ip, Date.now())) {
+          log.warn("rate limit hit", { ip });
           return json({ error: "muitas tentativas, aguarde" }, 429);
+        }
 
         const body = (await req.json().catch(() => ({}))) as { password?: string };
         const token = ctx.auth.login(body.password ?? "", Date.now());
 
-        if (!token) return json({ error: "senha incorreta" }, 401);
+        if (!token) {
+          log.warn("login failed", { ip });
+          return json({ error: "senha incorreta" }, 401);
+        }
 
+        log.info("login success", { ip });
         return json({ ok: true }, 200, { "set-cookie": ctx.auth.cookieFor(token) });
       },
     },
@@ -120,7 +129,11 @@ export function createApp(ctx: AppContext) {
     "/api/record": {
       POST: requireAuth(() => {
         const result = ctx.jobs.trigger(Date.now());
-        if ("error" in result) return json(result, result.error === "cooldown" ? 429 : 409);
+        if ("error" in result) {
+          log.info("record triggered");
+          return json(result, result.error === "cooldown" ? 429 : 409);
+        }
+        log.info("record triggered", { jobId: result.jobId });
         return json(result);
       }),
     },
@@ -132,6 +145,7 @@ export function createApp(ctx: AppContext) {
           return json({ error: "invalid seconds" }, 400);
         ctx.config.setClipDuration(body.seconds!);
         ctx.hub.onStateChanged();
+        log.info("clip duration changed", { seconds: ctx.config.value.clipDurationSeconds });
         return json({ clipDurationSeconds: ctx.config.value.clipDurationSeconds });
       }),
     },
@@ -191,6 +205,7 @@ export function createApp(ctx: AppContext) {
           slug,
           files: saved,
         });
+        if (accepted) log.info("upload received", { jobId, angleName, fileCount: saved.length });
         return accepted ? json({ ok: true }) : json({ error: "job already finalized" }, 404);
       }),
     },

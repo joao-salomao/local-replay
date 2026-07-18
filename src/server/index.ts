@@ -6,11 +6,14 @@ import { JobManager } from "./clip-job";
 import { ConfigStore } from "./config";
 import { ensureCert } from "./cert";
 import { Hub, TOPIC_ALL, TOPIC_CAMERAS, type WSData } from "./hub";
+import { logger } from "./log";
 import { buildPages } from "./pages";
 import { SerialQueue } from "./queue";
 import { createApp, type AppContext } from "./routes";
 import { Storage } from "./storage";
 import type { ServerMessage } from "../shared/protocol";
+
+const log = logger("server");
 
 const dataDir = process.env.DATA_DIR ?? "data";
 const httpsPort = Number(process.env.HTTPS_PORT ?? 8443);
@@ -100,12 +103,17 @@ function publishState(): void {
 }
 hub.onStateChanged = publishState;
 
+log.debug("sweep interval started", { intervalMs: 2_000 });
 setInterval(() => hub.sweep(Date.now()), 2_000);
-storage.cleanupRetention(config.value.retentionDays, Date.now());
-setInterval(
-  () => storage.cleanupRetention(config.value.retentionDays, Date.now()),
-  24 * 60 * 60 * 1000,
-);
+
+function runRetentionCleanup(): void {
+  const deleted = storage.cleanupRetention(config.value.retentionDays, Date.now());
+  if (deleted.length > 0) {
+    log.info(`retention: removed ${deleted.length} day-folder(s)`, { count: deleted.length });
+  }
+}
+runRetentionCleanup();
+setInterval(runRetentionCleanup, 24 * 60 * 60 * 1000);
 
 let entryUrl: string;
 if (behindProxy) {
@@ -122,6 +130,11 @@ if (behindProxy) {
   const host = process.env.HOST_LAN_IP ?? "localhost";
   entryUrl = `https://${host}:${httpsPort}`;
 }
+
+log.info(
+  "boot",
+  behindProxy ? { mode: "proxy", port, entryUrl } : { mode: "lan", httpsPort, httpPort, entryUrl },
+);
 
 console.log(`\nReplay Local no ar: ${entryUrl}`);
 console.log(`Senha de acesso: ${config.value.password}\n`);

@@ -1,5 +1,8 @@
 import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { logger } from "./log";
+
+const log = logger("cert");
 
 export async function ensureCert(dataDir: string): Promise<{ certPath: string; keyPath: string }> {
   const dir = join(dataDir, "certs");
@@ -8,7 +11,9 @@ export async function ensureCert(dataDir: string): Promise<{ certPath: string; k
   const keyPath = join(dir, "key.pem");
   const ipMarker = join(dir, "san-ip");
   const wantedIp = process.env.HOST_LAN_IP ?? "";
-  const markedIp = existsSync(ipMarker) ? readFileSync(ipMarker, "utf8") : "";
+  const hadMarker = existsSync(ipMarker);
+  const markedIp = hadMarker ? readFileSync(ipMarker, "utf8") : "";
+  const ipChanged = hadMarker && wantedIp !== "" && markedIp !== wantedIp;
   if (wantedIp && markedIp !== wantedIp) {
     rmSync(certPath, { force: true }); // IP changed: SAN must match for iOS/Android trust
     rmSync(keyPath, { force: true });
@@ -44,6 +49,10 @@ export async function ensureCert(dataDir: string): Promise<{ certPath: string; k
     writeFileSync(ipMarker, wantedIp);
     chmodSync(keyPath, 0o600);
     chmodSync(dir, 0o700);
+    if (ipChanged) log.info("cert regenerated (SAN IP changed)", { ip: wantedIp });
+    else log.info("cert generated", { certPath });
+  } else {
+    log.debug("cert reused", { certPath });
   }
   return { certPath, keyPath };
 }

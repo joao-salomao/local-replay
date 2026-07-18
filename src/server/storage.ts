@@ -9,6 +9,9 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 import type { Layout } from "./config";
+import { logger } from "./log";
+
+const log = logger("storage");
 
 export type ClipOutputs = { combined: string | null; angles: Record<string, string> };
 export type ClipCamera = {
@@ -102,6 +105,9 @@ export class Storage {
         deleted.push(day);
       }
     }
+    // index.ts logs the aggregate count at info; keep the specific folder names at debug
+    // here to avoid double-logging the same event at two levels.
+    if (deleted.length > 0) log.debug("retention deleted folders", { folders: deleted.join(",") });
     return deleted;
   }
 }

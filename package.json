@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "bun run src/server/index.ts",
     "start": "bun run src/server/index.ts",
-    "test": "bun test tests/unit tests/integration",
+    "test": "LOG_LEVEL=silent bun test tests/unit tests/integration",
     "test:e2e": "playwright test",
     "format": "biome format --write .",
     "format:check": "biome format ."

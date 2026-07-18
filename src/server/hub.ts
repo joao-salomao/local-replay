@@ -1,10 +1,13 @@
 import type { ServerWebSocket } from "bun";
+import { logger } from "./log";
 import type { CameraInfo, ClientMessage, ServerMessage } from "../shared/protocol";
 
 export type WSData = { role?: "camera" | "control"; cameraId?: string };
 export const TOPIC_ALL = "all";
 export const TOPIC_CAMERAS = "cameras";
 export const OFFLINE_AFTER_MS = 10_000;
+
+const log = logger("hub");
 
 type CameraConn = { info: CameraInfo; lastSeen: number };
 
@@ -52,6 +55,9 @@ export class Hub {
         });
         const reply: ServerMessage = { type: "registered", cameraId: id };
         ws.send(JSON.stringify(reply));
+        log.info("camera registered", { id, name: msg.name });
+      } else {
+        log.debug("control registered");
       }
       this.onStateChanged();
       return;
@@ -61,6 +67,7 @@ export class Hub {
     cam.lastSeen = nowMs;
     const wasOffline = !cam.info.online;
     cam.info.online = true;
+    if (wasOffline) log.info("camera back online", { id: cam.info.id, name: cam.info.name });
     if (msg.type === "cameraStatus") {
       const changed =
         wasOffline ||
@@ -87,6 +94,9 @@ export class Hub {
       if (online !== cam.info.online) {
         cam.info.online = online;
         changed = true;
+        // sweep only ever detects timeouts (going offline); a camera coming back online is
+        // always observed first via message(), which logs it there.
+        if (!online) log.info("camera offline", { id: cam.info.id, name: cam.info.name });
       }
     }
     if (changed) this.onStateChanged();
