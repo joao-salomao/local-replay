@@ -13,6 +13,7 @@ hora de montar a imagem Docker).
 - [Como usar](#como-usar)
 - [Conectando cada aparelho](#conectando-cada-aparelho)
 - [Configuração](#configuração)
+- [Rodando na internet (atrás de um proxy)](#rodando-na-internet-atrás-de-um-proxy)
 - [Desenvolvimento](#desenvolvimento)
 - [Checklist de quadra](#checklist-de-quadra)
 - [Nota de performance](#nota-de-performance)
@@ -127,6 +128,84 @@ rodar fora do Docker ou mudar as portas padrão):
 | `HTTPS_PORT` | `8443` | Porta HTTPS — é a porta de entrada do sistema. |
 | `HTTP_PORT` | `8080` | Porta HTTP; só responde com redirect 301 para a HTTPS. |
 | `HOST_LAN_IP` | *(vazio)* | IP da máquina na rede local, usado no certificado (SAN) e na URL impressa no boot. O `start.sh` já detecta e injeta esse valor sozinho. |
+
+## Rodando na internet (atrás de um proxy)
+
+Por padrão o Replay Local roda em **modo LAN** (tudo acima): HTTPS autoassinado, pensado para uso
+dentro da rede Wi-Fi de uma quadra. Se quiser expor o sistema na internet — por exemplo, um evento
+em que nem todo mundo consegue entrar na mesma rede — dá para rodar em **modo proxy**: o Bun serve
+HTTP puro numa porta interna, e um proxy reverso na frente (Caddy, nginx, Cloudflare Tunnel etc.)
+cuida do TLS com um certificado de verdade.
+
+**Variáveis de ambiente do modo proxy** (além das já existentes; `HTTPS_PORT`/`HTTP_PORT`/
+`HOST_LAN_IP` da tabela acima são ignoradas nesse modo):
+
+| Variável | Padrão | Descrição |
+|---|---|---|
+| `BEHIND_PROXY` | *(vazio)* | Qualquer valor **não vazio** ativa o modo proxy (ex.: `BEHIND_PROXY=1`) — inclusive `"false"` ou `"0"`, então para desligar é só não definir a variável. Nesse modo desliga a geração do certificado autoassinado e o redirect HTTP→HTTPS; o servidor passa a escutar HTTP puro em `PORT`. |
+| `PUBLIC_URL` | *(vazio)* | Endereço público servido pelo proxy (ex.: `https://replay.exemplo.com`), usado na mensagem de boot e no QR code do terminal. **Se não for definida, o servidor sobe mesmo assim, mas avisa no terminal** que o QR/link vai apontar para `localhost` e não vai funcionar nos aparelhos dos jogadores. |
+| `PORT` | `8080` | Porta HTTP pura em que o app escuta, para o proxy encaminhar as requisições. |
+
+Com `BEHIND_PROXY` ativo, o IP usado para limitar tentativas de login (rate limit) passa a vir do
+cabeçalho `X-Forwarded-For` (primeiro IP da lista) em vez do IP do socket — nesse modo o socket é
+sempre o do proxy, não o do cliente. Qualquer proxy reverso comum já define esse cabeçalho com o IP
+real do cliente por padrão.
+
+### Exemplo com Caddy
+
+O [Caddy](https://caddyserver.com) provisiona certificado Let's Encrypt automaticamente para o
+domínio configurado e já encaminha WebSocket sem nenhuma configuração extra (diferente do nginx,
+que exige os headers `Upgrade`/`Connection` manualmente). Um `Caddyfile` mínimo:
+
+```
+replay.exemplo.com {
+    reverse_proxy localhost:8080
+}
+```
+
+Suba o app com `BEHIND_PROXY=1 PUBLIC_URL=https://replay.exemplo.com PORT=8080` no ambiente (veja
+a nota de Docker abaixo) e rode o Caddy na mesma máquina (ou num container ao lado) apontando para
+essa mesma porta.
+
+### Docker
+
+No `docker-compose.yml`, publique só a porta HTTP (quem fica público é o proxy, não o app) e passe
+as três variáveis nesse serviço:
+
+```yaml
+services:
+  replay:
+    build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - BEHIND_PROXY=1
+      - PUBLIC_URL=https://replay.exemplo.com
+      - PORT=8080
+    restart: unless-stopped
+```
+
+### Nota de segurança
+
+Sendo honesto: o único obstáculo entre um desconhecido na internet e as câmeras/clipes desse
+sistema é a **senha compartilhada** guardada em `data/config.json`. Não existe conta por pessoa,
+convite ou lista de permissões — quem tem a senha (ou consegue adivinhar) vê tudo. Isso é aceitável
+para uso doméstico numa rede fechada (modo LAN), mas expor na internet muda o cálculo de risco.
+Recomendações mínimas antes de expor publicamente:
+
+- Troque a senha gerada automaticamente por uma forte (edite o campo `password` em
+  `data/config.json` antes de subir, ou pare o container, edite e suba de novo).
+- Sirva **só** HTTPS — é isso que o proxy da seção acima já garante; não exponha a porta `PORT`
+  (HTTP puro) diretamente para a internet, apenas o proxy deve ser público.
+- Para um evento privado, considere também restringir por IP na frente, no proxy — por exemplo, no
+  Caddy, com um matcher `remote_ip` bloqueando quem não estiver na lista esperada — em vez de
+  depender só da senha.
+
+As instruções de modo LAN (rede local, sem proxy) continuam valendo normalmente e são o padrão sem
+nenhuma variável nova — veja [Como iniciar](#como-iniciar) e [Configuração](#configuração). O modo
+proxy é só opt-in via `BEHIND_PROXY`.
 
 ## Desenvolvimento
 

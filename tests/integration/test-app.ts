@@ -14,6 +14,7 @@ import type { ServerMessage } from "../../src/shared/protocol";
 export async function createAppForTest(
   dataDir: string,
   jobOverrides: { uploadTimeoutMs?: number; cooldownMs?: number } = {},
+  opts: { trustProxy?: boolean; loginLimiter?: RateLimiter } = {},
 ) {
   const config = ConfigStore.load(dataDir);
   const storage = new Storage(dataDir);
@@ -25,7 +26,8 @@ export async function createAppForTest(
     storage,
     auth: Auth.load(dataDir, () => config.value.password),
     hub,
-    loginLimiter: new RateLimiter(100, 60_000),
+    loginLimiter: opts.loginLimiter ?? new RateLimiter(100, 60_000),
+    trustProxy: opts.trustProxy ?? false,
     pages: await buildPages("src/web", mkdtempSync(join(tmpdir(), "replay-dist-"))),
     jobs: undefined as unknown as JobManager,
   };

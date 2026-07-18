@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { RateLimiter } from "../../src/server/auth";
 import { createAppForTest } from "./test-app";
 
 let base: string;
@@ -133,5 +134,38 @@ describe("routes", () => {
     expect((await res.json()).error).toBeTruthy();
 
     app.ctx.hub.close(fakeWs); // return the shared hub to zero cameras for other tests
+  });
+
+  it("keys the login rate limiter off X-Forwarded-For when behind a proxy", async () => {
+    // dedicated instance: trustProxy on + a tight limiter, so the test is deterministic and
+    // isolated from the shared `app` above (which uses a permissive 100/min limiter)
+    const dataDir = mkdtempSync(join(tmpdir(), "replay-routes-proxy-"));
+    writeFileSync(join(dataDir, "config.json"), JSON.stringify({ password: "senha-teste" }));
+    const proxyApp = await createAppForTest(
+      dataDir,
+      {},
+      { trustProxy: true, loginLimiter: new RateLimiter(5, 60_000) },
+    );
+    try {
+      const attempt = (forwardedFor: string) =>
+        fetch(`${proxyApp.base}/api/login`, {
+          method: "POST",
+          headers: { "x-forwarded-for": forwardedFor },
+          body: JSON.stringify({ password: "nope" }),
+        });
+
+      // 5 wrong-password attempts from the same forwarded IP are each let through the limiter
+      for (let i = 0; i < 5; i++) {
+        expect((await attempt("9.9.9.9")).status).toBe(401);
+      }
+      // the 6th attempt from that same forwarded IP is rate limited
+      expect((await attempt("9.9.9.9")).status).toBe(429);
+
+      // a different forwarded IP has its own bucket — proves the limiter keys off
+      // X-Forwarded-For, not the shared loopback socket every request in this test arrives on
+      expect((await attempt("1.2.3.4")).status).toBe(401);
+    } finally {
+      proxyApp.stop();
+    }
   });
 });

@@ -19,6 +19,8 @@ export type AppContext = {
   hub: Hub;
   jobs: JobManager;
   loginLimiter: RateLimiter;
+  /** true when running behind a reverse proxy (BEHIND_PROXY) — trust X-Forwarded-For for client IP */
+  trustProxy: boolean;
   pages: PageAssets;
 };
 
@@ -98,12 +100,18 @@ export function createApp(ctx: AppContext) {
 
     "/api/login": {
       POST: async (req: Request, server: Server<WSData>) => {
-        const ip = server.requestIP(req)?.address ?? "unknown";
+        const ip = ctx.trustProxy
+          ? req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown"
+          : (server.requestIP(req)?.address ?? "unknown");
+
         if (!ctx.loginLimiter.allow(ip, Date.now()))
           return json({ error: "muitas tentativas, aguarde" }, 429);
+
         const body = (await req.json().catch(() => ({}))) as { password?: string };
         const token = ctx.auth.login(body.password ?? "", Date.now());
+
         if (!token) return json({ error: "senha incorreta" }, 401);
+
         return json({ ok: true }, 200, { "set-cookie": ctx.auth.cookieFor(token) });
       },
     },
