@@ -31,6 +31,7 @@ export type ServerMessage =
       type: "state";
       cameras: CameraInfo[];
       clipDurationSeconds: number;
+      bufferCycleMinSeconds: number;
       jobs: JobStatus[];
       freeDiskGB: number | null;
     }

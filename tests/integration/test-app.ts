@@ -57,6 +57,7 @@ export async function createAppForTest(
         type: "state",
         cameras: hub.cameras(),
         clipDurationSeconds: config.value.clipDurationSeconds,
+        bufferCycleMinSeconds: config.value.bufferCycleMinSeconds,
         jobs: ctx.jobs.jobs(),
         freeDiskGB: storage.freeDiskGB(),
       } satisfies ServerMessage),

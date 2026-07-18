@@ -18,6 +18,7 @@ let cameraId = "";
 let stream: MediaStream;
 let mimeType = "";
 let clipDurationSeconds = 20;
+let bufferCycleMinSeconds = 30;
 let recorder: MediaRecorder | null = null;
 let files: BufferedFile[] = []; // previous + just-finalized, max 2
 let cycleTimer = 0;
@@ -135,7 +136,7 @@ function startCycle(): void {
   clearTimeout(cycleTimer);
   cycleTimer = window.setTimeout(() => {
     if (rec.state === "recording") rec.stop();
-  }, cycleSeconds(clipDurationSeconds, 30) * 1000);
+  }, cycleSeconds(clipDurationSeconds, bufferCycleMinSeconds) * 1000);
   $("buffer-status").textContent = `Bufferizando últimos ${clipDurationSeconds}s`;
 }
 
@@ -185,6 +186,7 @@ function handleMessage(msg: ServerMessage): void {
     reportStatus();
   }
   if (msg.type === "state") {
+    bufferCycleMinSeconds = msg.bufferCycleMinSeconds;
     if (msg.clipDurationSeconds !== clipDurationSeconds) {
       clipDurationSeconds = msg.clipDurationSeconds; // applied on the next cycle restart
       $("buffer-status").textContent = `Bufferizando últimos ${clipDurationSeconds}s`;

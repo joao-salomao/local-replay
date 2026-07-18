@@ -1,5 +1,5 @@
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 export const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
@@ -13,7 +13,10 @@ export class Auth {
   static load(dataDir: string, password: () => string): Auth {
     mkdirSync(dataDir, { recursive: true });
     const path = join(dataDir, "session-secret");
-    if (!existsSync(path)) writeFileSync(path, randomBytes(32).toString("hex"));
+    if (!existsSync(path)) {
+      writeFileSync(path, randomBytes(32).toString("hex"));
+      chmodSync(path, 0o600);
+    }
     return new Auth(readFileSync(path, "utf8").trim(), password);
   }
 

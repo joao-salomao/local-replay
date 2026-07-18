@@ -39,9 +39,15 @@ export async function processClip(o: {
   const cameras: ClipCamera[] = [];
   const errors: string[] = [];
   const anglePaths: string[] = [];
+  const usedSlugs = new Set<string>();
 
   for (const angle of o.angles) {
     try {
+      let uniqueSlug = angle.slug;
+      let n = 2;
+      while (usedSlugs.has(uniqueSlug)) uniqueSlug = `${angle.slug}-${n++}`;
+      usedSlugs.add(uniqueSlug);
+
       const probed = [];
       let hasAudio = false;
       for (const f of angle.files) {
@@ -55,7 +61,7 @@ export async function processClip(o: {
       let listFile: string | null = null;
       let input: string | null = null;
       if (probed.length > 1) {
-        listFile = join(clipDir, "raw", `${angle.slug}-list.txt`);
+        listFile = join(clipDir, "raw", `${uniqueSlug}-list.txt`);
         writeConcatList(
           probed.map((p) => p.path),
           listFile,
@@ -63,7 +69,7 @@ export async function processClip(o: {
       } else {
         input = probed[0]!.path;
       }
-      const outName = `angle-${angle.slug}.mp4`;
+      const outName = `angle-${uniqueSlug}.mp4`;
       await runFfmpeg(
         normalizeCutArgs({
           listFile,
@@ -77,11 +83,11 @@ export async function processClip(o: {
           output: join(clipDir, outName),
         }),
       );
-      outputs.angles[angle.slug] = outName;
+      outputs.angles[uniqueSlug] = outName;
       anglePaths.push(join(clipDir, outName));
       cameras.push({
         name: angle.name,
-        slug: angle.slug,
+        slug: uniqueSlug,
         files: probed.map(({ startMs, durationMs }) => ({ startMs, durationMs })),
       });
     } catch (e) {

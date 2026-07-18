@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it, setDefaultTimeout } from "bun:test";
-import { mkdirSync, mkdtempSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DEFAULT_CONFIG, type Config } from "../../src/server/config";
@@ -115,5 +115,32 @@ describe("processClip", () => {
     expect(Object.keys(result.outputs.angles)).toEqual(["ok"]);
     expect(result.errors.length).toBe(1);
     expect(result.outputs.combined).toBe("combined.mp4"); // single valid angle copied
+  }, 180_000);
+
+  it("two angles with the same name both survive in the combined clip", async () => {
+    const clipDir = mkdtempSync(join(tmpdir(), "replay-clip-"));
+    mkdirSync(join(clipDir, "raw"), { recursive: true });
+    const result = await processClip({
+      clipDir,
+      t: 100_000,
+      windowSec: 5,
+      config,
+      angles: [
+        // two cameras both named "Fundo" collide on slug "fundo" before uniquification
+        { name: "Fundo", slug: "fundo", files: [{ path: rawB0, startMs: 90_000 }] },
+        { name: "Fundo", slug: "fundo", files: [{ path: rawB0, startMs: 90_000 }] },
+      ],
+    });
+    expect(result.errors).toEqual([]);
+    expect(Object.keys(result.outputs.angles).sort()).toEqual(["fundo", "fundo-2"]);
+    expect(existsSync(join(clipDir, "angle-fundo.mp4"))).toBe(true);
+    expect(existsSync(join(clipDir, "angle-fundo-2.mp4"))).toBe(true);
+
+    const single = await probe(join(clipDir, "angle-fundo.mp4"));
+    const combined = await probe(join(clipDir, "combined.mp4"));
+    // combined concatenates both angles sequentially: ~2x a single angle's duration,
+    // proving both survived rather than the 2nd overwriting the 1st.
+    expect(combined.durationSec).toBeGreaterThan(single.durationSec * 1.7);
+    expect(combined.durationSec).toBeLessThan(single.durationSec * 2.3);
   }, 180_000);
 });

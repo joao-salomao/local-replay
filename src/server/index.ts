@@ -39,7 +39,8 @@ ctx.jobs = new JobManager({
       TOPIC_CAMERAS,
       JSON.stringify({ type: "record", jobId, t, windowSec } satisfies ServerMessage),
     ),
-  onUpdate: () => publishState(),
+  onUpdate: (job) =>
+    server.publish(TOPIC_ALL, JSON.stringify({ type: "jobUpdate", job } satisfies ServerMessage)),
 });
 
 const { certPath, keyPath } = await ensureCert(dataDir);
@@ -57,6 +58,7 @@ function publishState(): void {
     type: "state",
     cameras: hub.cameras(),
     clipDurationSeconds: config.value.clipDurationSeconds,
+    bufferCycleMinSeconds: config.value.bufferCycleMinSeconds,
     jobs: ctx.jobs.jobs(),
     freeDiskGB: storage.freeDiskGB(),
   };

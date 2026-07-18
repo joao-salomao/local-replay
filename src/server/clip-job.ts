@@ -82,6 +82,7 @@ export class JobManager {
   addUpload(jobId: string, cameraId: string, angle: RawAngle): boolean {
     const job = this.active.get(jobId);
     if (!job || job.status.state !== "capturing") return false;
+    if (job.delivered.has(cameraId)) return true; // idempotent: this camera already delivered
     job.angles.push(angle);
     job.delivered.add(cameraId);
     if ([...job.expected].every((id) => job.delivered.has(id))) this.finalize(jobId);

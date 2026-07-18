@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { randomBytes } from "node:crypto";
 
@@ -57,5 +57,6 @@ export class ConfigStore {
 
   save(): void {
     writeFileSync(this.path, JSON.stringify(this.value, null, 2));
+    chmodSync(this.path, 0o600);
   }
 }

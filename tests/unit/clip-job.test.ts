@@ -5,10 +5,16 @@ import { join } from "node:path";
 import type { JobStatus } from "../../src/shared/protocol";
 import { ConfigStore } from "../../src/server/config";
 import { JobManager } from "../../src/server/clip-job";
+import type { RawAngle } from "../../src/server/pipeline";
 import { SerialQueue } from "../../src/server/queue";
 import { Storage } from "../../src/server/storage";
 
-function setup(cameraIds: string[], processOk = true, writeMetaThrows = false) {
+function setup(
+  cameraIds: string[],
+  processOk = true,
+  writeMetaThrows = false,
+  onProcess?: (angles: RawAngle[]) => void,
+) {
   const dir = mkdtempSync(join(tmpdir(), "replay-job-"));
   const updates: JobStatus[] = [];
   const rawUpdates: JobStatus[] = [];
@@ -29,7 +35,8 @@ function setup(cameraIds: string[], processOk = true, writeMetaThrows = false) {
       updates.push({ ...j });
       rawUpdates.push(j);
     },
-    processFn: async () => {
+    processFn: async (o) => {
+      onProcess?.(o.angles);
       if (!processOk) throw new Error("ffmpeg exploded");
       return {
         outputs: { combined: "combined.mp4", angles: { a: "angle-a.mp4" } },
@@ -119,5 +126,20 @@ describe("JobManager", () => {
     manager.addUpload(jobId, "cam2", angle);
     await waitFor(() => updates.some((u) => u.state === "ready"));
     expect(rawUpdates[0]!.state).toBe("capturing");
+  });
+
+  it("ignores a duplicate upload from the same camera", async () => {
+    const capturedAngles: RawAngle[][] = [];
+    const { manager, updates } = setup(["cam1", "cam2"], true, false, (angles) =>
+      capturedAngles.push(angles),
+    );
+    const { jobId } = manager.trigger(1000) as { jobId: string };
+    expect(manager.addUpload(jobId, "cam1", angle)).toBe(true);
+    // retry from the same camera (e.g. a lost HTTP response after a server-side success)
+    expect(manager.addUpload(jobId, "cam1", angle)).toBe(true);
+    expect(manager.addUpload(jobId, "cam2", angle)).toBe(true);
+    await waitFor(() => updates.some((u) => u.state === "ready"));
+    expect(capturedAngles).toHaveLength(1);
+    expect(capturedAngles[0]).toHaveLength(2); // cam1 once + cam2, not 3
   });
 });
