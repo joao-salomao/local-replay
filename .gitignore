@@ -4,3 +4,8 @@ data/
 .DS_Store
 .idea/
 .superpowers/
+.e2e-data/
+.e2e-data-buffer/
+/test-results/
+/playwright-report/
+/blob-report/
