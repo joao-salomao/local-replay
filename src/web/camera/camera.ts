@@ -56,6 +56,7 @@ let files: BufferedFile[] = []; // previous + just-finalized, max 2
 let cycleTimer = 0;
 let cycleGen = 0;
 let pendingRecord: { jobId: string; t: number; windowSec: number } | null = null;
+// biome-ignore lint/correctness/noUnusedVariables: only reassigned, never read — holds the WakeLockSentinel reference so it isn't GC'd (some engines auto-release the lock otherwise).
 let wakeLock: { release(): Promise<void> } | null = null;
 let wasHidden = false;
 let currentDeviceId: string | null = null;
@@ -120,7 +121,9 @@ async function recoverStream(): Promise<void> {
   clearTimeout(cycleTimer);
   pendingRecord = null; // a triggered clip can't survive stream loss — avoid a later spurious empty upload
   files = [];
-  stream.getTracks().forEach((t) => t.stop());
+  stream.getTracks().forEach((t) => {
+    t.stop();
+  });
   stream = await acquireMedia(currentDeviceId);
   $<HTMLVideoElement>("preview").srcObject = stream;
   watchTrack();
@@ -219,7 +222,9 @@ async function uploadClip(
     "filesMeta",
     JSON.stringify(selected.map((f) => ({ startMs: f.startMs, mimeType: f.mimeType }))),
   );
-  selected.forEach((f, i) => form.append(`file${i}`, f.blob, `part${i}`));
+  selected.forEach((f, i) => {
+    form.append(`file${i}`, f.blob, `part${i}`);
+  });
   let outcome: "ok" | "notFound" | "failed" = "failed";
   for (let attempt = 0; attempt < 3; attempt++) {
     try {

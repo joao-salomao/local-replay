@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
-import type { ServerWebSocket } from "bun";
 import { Hub, OFFLINE_AFTER_MS, type WSData } from "@server/hub";
+import type { ServerWebSocket } from "bun";
 
 function fakeWs() {
   const sent: string[] = [];

@@ -2,12 +2,12 @@ import { describe, expect, it } from "bun:test";
 import { existsSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { JobStatus } from "@shared/protocol";
-import { ConfigStore } from "@server/config";
 import { JobManager } from "@server/clip-job";
+import { ConfigStore } from "@server/config";
 import type { RawAngle } from "@server/pipeline";
 import { SerialQueue } from "@server/queue";
 import { Storage } from "@server/storage";
+import type { JobStatus } from "@shared/protocol";
 
 function setup(
   cameraIds: string[],

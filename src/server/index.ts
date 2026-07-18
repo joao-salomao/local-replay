@@ -1,18 +1,18 @@
 import { join } from "node:path";
-import QRCode from "qrcode";
+import type { LogEntry, ServerMessage } from "@shared/protocol";
 import type { Server } from "bun";
+import QRCode from "qrcode";
 import { Auth, RateLimiter } from "./auth";
+import { ensureCert } from "./cert";
 import { JobManager } from "./clip-job";
 import { ConfigStore } from "./config";
-import { ensureCert } from "./cert";
 import { Hub, TOPIC_ALL, TOPIC_CAMERAS, TOPIC_CONTROLS, type WSData } from "./hub";
 import { addLogSink, logger } from "./log";
 import { LogBuffer } from "./log-buffer";
 import { buildPages } from "./pages";
 import { SerialQueue } from "./queue";
-import { createApp, type AppContext } from "./routes";
+import { type AppContext, createApp } from "./routes";
 import { Storage } from "./storage";
-import type { LogEntry, ServerMessage } from "@shared/protocol";
 
 const log = logger("server");
 

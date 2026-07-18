@@ -48,7 +48,9 @@ beforeAll(async () => {
 });
 
 afterAll(() => {
-  sims.forEach((s) => s.close());
+  sims.forEach((s) => {
+    s.close();
+  });
   app.stop();
   rmSync(dataDir, { recursive: true, force: true });
   rmSync(rawDir, { recursive: true, force: true });

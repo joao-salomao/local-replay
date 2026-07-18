@@ -3,8 +3,10 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { RateLimiter } from "@server/auth";
+import type { WSData } from "@server/hub";
 import type { LogBuffer } from "@server/log-buffer";
 import type { LogEntry } from "@shared/protocol";
+import type { ServerWebSocket } from "bun";
 import { createAppForTest } from "./test-app";
 
 let base: string;
@@ -111,7 +113,9 @@ describe("routes", () => {
     // AppContext narrows logBuffer to just `{ entries() }` (all routes.ts itself ever needs) — the
     // test reaches for the concrete `LogBuffer.push` to seed the backlog directly and
     // deterministically, without going through the logger/sink machinery.
-    pushed.forEach((e) => (app.ctx.logBuffer as LogBuffer).push(e));
+    pushed.forEach((e) => {
+      (app.ctx.logBuffer as LogBuffer).push(e);
+    });
 
     const res = await fetch(`${base}/api/logs`, { headers: { cookie } });
     expect(res.status).toBe(200);
@@ -141,7 +145,11 @@ describe("routes", () => {
   it("rejects malformed filesMeta items with 400, not 500", async () => {
     const cookie = await login();
     // put one camera online via the hub, then trigger a real capturing job
-    const fakeWs = { data: {} as any, send() {}, subscribe() {} } as any;
+    const fakeWs = {
+      data: {} as WSData,
+      send() {},
+      subscribe() {},
+    } as unknown as ServerWebSocket<WSData>;
     app.ctx.hub.open(fakeWs);
     app.ctx.hub.message(
       fakeWs,

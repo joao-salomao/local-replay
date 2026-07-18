@@ -22,7 +22,7 @@ describe("SerialQueue", () => {
       throw new Error("boom");
     });
     await expect(failed).rejects.toThrow("boom");
-    const ok = q.push(async () => "fine" as unknown as void);
+    const ok = q.push(async () => "fine" as unknown as undefined);
     await ok;
   });
 });

@@ -15,7 +15,9 @@ describe("LogBuffer", () => {
 
   it("returns entries oldest to newest", () => {
     const buf = new LogBuffer(10);
-    [1, 2, 3].forEach((i) => buf.push(entry(i)));
+    [1, 2, 3].forEach((i) => {
+      buf.push(entry(i));
+    });
     expect(buf.entries().map((e) => e.seq)).toEqual([1, 2, 3]);
   });
 

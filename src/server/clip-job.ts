@@ -130,7 +130,7 @@ export class JobManager {
    */
   addUpload(jobId: string, cameraId: string, angle: RawAngle): boolean {
     const job = this.active.get(jobId);
-    if (!job || job.status.state !== "capturing") return false;
+    if (job?.status.state !== "capturing") return false;
     if (job.delivered.has(cameraId)) return true; // idempotent: this camera already delivered
     job.angles.push(angle);
     job.delivered.add(cameraId);
@@ -153,7 +153,7 @@ export class JobManager {
    */
   private finalize(jobId: string): void {
     const job = this.active.get(jobId);
-    if (!job || job.status.state !== "capturing") return;
+    if (job?.status.state !== "capturing") return;
     clearTimeout(job.timer);
     job.status.state = "processing";
     log.info("processing", { jobId });

@@ -1,6 +1,6 @@
+import { randomBytes } from "node:crypto";
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { randomBytes } from "node:crypto";
 
 /**
  * Persisted, mutable server configuration (`<dataDir>/config.json`), including the plaintext

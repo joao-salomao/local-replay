@@ -10,7 +10,7 @@
   <h1>🔴 Controle</h1>
   <div class="banner" id="disk-banner" hidden></div>
   <div class="card">
-    <button id="record" class="record-btn danger" disabled>GRAVAR</button>
+    <button type="button" id="record" class="record-btn danger" disabled>GRAVAR</button>
     <div class="error" id="record-error"></div>
     <p class="row"><span class="status-dot" id="conn-dot"></span><span id="cam-count">0 câmera(s) online</span></p>
     <p class="muted" id="cam-hint" hidden>Nenhuma câmera online — abra /camera em um celular</p>
@@ -38,7 +38,7 @@
         <option value="warn">warn</option>
         <option value="error">error</option>
       </select>
-      <button id="log-clear">Limpar</button>
+      <button type="button" id="log-clear">Limpar</button>
     </div>
     <div id="log-view" class="log-view"></div>
   </details>

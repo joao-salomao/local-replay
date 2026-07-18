@@ -150,7 +150,9 @@ describe("addLogSink", () => {
     disposers = [];
   });
   afterEach(() => {
-    disposers.forEach((dispose) => dispose());
+    disposers.forEach((dispose) => {
+      dispose();
+    });
   });
 
   it("receives an emitted entry with a growing seq, ISO ts, level, scope, message, and fields", () => {

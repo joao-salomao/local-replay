@@ -9,7 +9,7 @@ import { addLogSink } from "@server/log";
 import { LogBuffer } from "@server/log-buffer";
 import { buildPages } from "@server/pages";
 import { SerialQueue } from "@server/queue";
-import { createApp, type AppContext } from "@server/routes";
+import { type AppContext, createApp } from "@server/routes";
 import { Storage } from "@server/storage";
 import type { LogEntry, ServerMessage } from "@shared/protocol";
 

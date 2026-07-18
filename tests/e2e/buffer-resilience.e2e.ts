@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 
 // Runs against the second webServer entry (its own data dir), isolated from
 // record-flow.spec.ts, so this spec's own trigger is a clean "clip #1" regardless

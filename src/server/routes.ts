@@ -1,17 +1,17 @@
 import { existsSync } from "node:fs";
 import { join, normalize, resolve } from "node:path";
-import QRCode from "qrcode";
+import type { LogEntry } from "@shared/protocol";
 import type { BunRequest, Server, WebSocketHandler } from "bun";
+import QRCode from "qrcode";
 import type { Auth, RateLimiter } from "./auth";
 import { tokenFromCookie } from "./auth";
 import type { JobManager } from "./clip-job";
 import type { ConfigStore } from "./config";
-import { Hub, type WSData } from "./hub";
+import type { Hub, WSData } from "./hub";
 import { logger } from "./log";
 import type { PageAssets, PageName } from "./pages";
 import { slugify } from "./pipeline";
 import type { Storage } from "./storage";
-import type { LogEntry } from "@shared/protocol";
 
 const log = logger("http");
 
@@ -67,16 +67,20 @@ export function createApp(ctx: AppContext) {
   const requireAuth =
     (
       handler: (
+        // biome-ignore lint/suspicious/noExplicitAny: Bun's route handler generics are awkward to thread through this HOF.
         req: any,
         server: Server<WSData>,
       ) => Response | undefined | Promise<Response | undefined>,
     ) =>
+    // biome-ignore lint/suspicious/noExplicitAny: same HOF-generics tradeoff as above.
     (req: any, server: Server<WSData>) =>
       isAuthed(req) ? handler(req, server) : json({ error: "unauthorized" }, 401);
   const requireAuthPage =
-    (handler: (req: any, server: Server<WSData>) => Response | Promise<Response>) =>
-    (req: any, server: Server<WSData>) =>
-      isAuthed(req) ? handler(req, server) : Response.redirect("/", 302);
+    // biome-ignore lint/suspicious/noExplicitAny: same HOF-generics tradeoff as above.
+      (handler: (req: any, server: Server<WSData>) => Response | Promise<Response>) =>
+      // biome-ignore lint/suspicious/noExplicitAny: same HOF-generics tradeoff as above.
+      (req: any, server: Server<WSData>) =>
+        isAuthed(req) ? handler(req, server) : Response.redirect("/", 302);
 
   const pageRoute = (name: PageName) => ({
     GET: requireAuthPage(() => html(ctx.pages.html(name))),
