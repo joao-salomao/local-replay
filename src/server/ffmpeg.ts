@@ -1,4 +1,5 @@
 import { writeFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 export type NormalizeOptions = {
   listFile: string | null;
@@ -13,7 +14,12 @@ export type NormalizeOptions = {
 };
 
 export function writeConcatList(paths: string[], listPath: string): void {
-  writeFileSync(listPath, paths.map((p) => `file '${p.replaceAll("'", "'\\''")}'`).join("\n"));
+  // Absolute paths only: ffmpeg's concat demuxer resolves relative list entries against the
+  // LIST FILE's directory (not cwd), so a relative DATA_DIR path gets doubled and fails to open.
+  writeFileSync(
+    listPath,
+    paths.map((p) => `file '${resolve(p).replaceAll("'", "'\\''")}'`).join("\n"),
+  );
 }
 
 export function normalizeCutArgs(o: NormalizeOptions): string[] {

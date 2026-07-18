@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import {
   combineSequentialArgs,
   combineSideBySideArgs,
@@ -14,6 +14,12 @@ describe("writeConcatList", () => {
     const listPath = join(mkdtempSync(join(tmpdir(), "replay-ffmpeg-")), "list.txt");
     writeConcatList(["/a/b.mp4", "/c/it's.webm"], listPath);
     expect(readFileSync(listPath, "utf8")).toBe("file '/a/b.mp4'\nfile '/c/it'\\''s.webm'");
+  });
+
+  it("resolves relative paths to absolute (ffmpeg concat resolves entries relative to the list dir, not cwd)", () => {
+    const listPath = join(mkdtempSync(join(tmpdir(), "replay-ffmpeg-")), "list.txt");
+    writeConcatList(["data/clips/x/raw/t-0.mp4"], listPath);
+    expect(readFileSync(listPath, "utf8")).toBe(`file '${resolve("data/clips/x/raw/t-0.mp4")}'`);
   });
 });
 

@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it, setDefaultTimeout } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { DEFAULT_CONFIG, type Config } from "../../src/server/config";
 import { probe, runFfmpeg } from "../../src/server/ffmpeg";
 import { processClip } from "../../src/server/pipeline";
@@ -76,6 +76,33 @@ describe("processClip", () => {
     const combined = await probe(join(clipDir, "combined.mp4"));
     expect(combined.durationSec).toBeGreaterThan(18.5);
     expect(combined.durationSec).toBeLessThan(21);
+  }, 180_000);
+
+  it("processes an angle whose raw files are cwd-relative paths (matches a relative DATA_DIR in prod)", async () => {
+    // Reproduces the prod failure: with DATA_DIR="data" the raw file paths are relative to cwd,
+    // and ffmpeg's concat demuxer resolves list entries relative to the LIST FILE's dir — doubling
+    // the path — unless writeConcatList emits absolute paths. mkdtemp (absolute) hid this in CI.
+    const clipDir = mkdtempSync(join(tmpdir(), "replay-clip-rel-"));
+    mkdirSync(join(clipDir, "raw"), { recursive: true });
+    const result = await processClip({
+      clipDir,
+      t: 100_000,
+      windowSec: 10,
+      config,
+      angles: [
+        {
+          name: "Rel",
+          slug: "rel",
+          files: [
+            { path: relative(process.cwd(), rawA0), startMs: 84_000 },
+            { path: relative(process.cwd(), rawA1), startMs: 92_200 },
+          ],
+        },
+      ],
+    });
+    expect(result.errors).toEqual([]);
+    expect(result.outputs.angles.rel).toBe("angle-rel.mp4");
+    expect(existsSync(join(clipDir, "angle-rel.mp4"))).toBe(true);
   }, 180_000);
 
   it("side-by-side layout stacks the first two angles", async () => {
