@@ -1,5 +1,10 @@
 import { api } from "../shared/api";
 
+/**
+ * Clips gallery page: polls `/api/clips` + `/api/state` every 10s and renders a card per
+ * non-processing clip (video preview, download links, a share button, and a QR code to the file).
+ */
+
 type ClipEntry = {
   clipNumber: number;
   createdAt: number;
@@ -21,6 +26,11 @@ const esc = (s: string) =>
 
 let lastSignature = "";
 
+/**
+ * Renders one clip's card, or `""` if there's nothing playable at all (caller filters these out).
+ * Prefers the combined multi-angle video; falls back to whichever single angle succeeded when
+ * `combined` is missing (e.g. only one angle came through, or the combine step itself failed).
+ */
 function card(clip: ClipEntry): string {
   const nameBySlug = new Map(clip.cameras.map((c) => [c.slug, c.name]));
   const src = clip.outputs.combined ?? Object.values(clip.outputs.angles)[0];
@@ -46,6 +56,15 @@ function card(clip: ClipEntry): string {
   </div>`;
 }
 
+/**
+ * Wires the Web Share API onto every rendered `.share-btn`, called after each `.innerHTML` swap
+ * since that destroys any previously-attached handlers along with the old nodes.
+ *
+ * Hidden entirely where `navigator.share` doesn't exist (desktop browsers) — the plain download
+ * links already cover that case. Where it does exist, fetches the video into a real `File` (not
+ * just a link) so `canShare({files})` can push it into apps like WhatsApp for a native "send
+ * video" experience; falls back to a plain download if file-based sharing isn't permitted.
+ */
 function wireShareButtons(): void {
   document.querySelectorAll<HTMLButtonElement>(".share-btn").forEach((btn) => {
     if (!("share" in navigator)) {
@@ -72,6 +91,14 @@ function wireShareButtons(): void {
   });
 }
 
+/**
+ * Polled every 10s (see bottom of file). Re-renders the clip list's `.innerHTML` only when a
+ * cheap signature of the relevant fields (number/state/outputs per clip) actually changed —
+ * rebuilding the DOM unconditionally on every poll would reset each `<video>`'s playback
+ * position and re-trigger thumbnail loads even when nothing changed. The disk-space banner is
+ * updated unconditionally on every poll instead, since free space can drift independently of the
+ * clip list.
+ */
 async function load(): Promise<void> {
   const clips = await api<ClipEntry[]>("/api/clips");
   const ready = clips.filter((c) => c.state !== "processing");

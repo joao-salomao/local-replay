@@ -1,8 +1,16 @@
 import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
+/**
+ * Builds argv arrays for `ffmpeg`/`ffprobe` invocations and runs them via `Bun.spawn`. Kept
+ * separate from `pipeline.ts` so the argument-building logic (easy to unit-test as plain data)
+ * is decoupled from process orchestration.
+ */
+
 export type NormalizeOptions = {
+  /** Concat-demuxer list file (multiple source segments) — mutually exclusive with `input`. */
   listFile: string | null;
+  /** Single source file — mutually exclusive with `listFile`. */
   input: string | null;
   startSec: number;
   durationSec: number;
@@ -13,15 +21,39 @@ export type NormalizeOptions = {
   output: string;
 };
 
+/**
+ * Writes an ffmpeg concat-demuxer list file (`file '...'` per line, one per path in `paths`).
+ *
+ * Paths are resolved to ABSOLUTE before writing: the concat demuxer resolves relative entries
+ * against the list file's own directory, not the process cwd, so a path built from a relative
+ * `DATA_DIR` would get silently mis-resolved (effectively doubled) and fail to open.
+ *
+ * Embedded single quotes are escaped by closing the quote, inserting an escaped quote, and
+ * reopening it (`'\\''`) — the shell-style quoting the concat demuxer's own line parser expects.
+ */
 export function writeConcatList(paths: string[], listPath: string): void {
-  // Absolute paths only: ffmpeg's concat demuxer resolves relative list entries against the
-  // LIST FILE's directory (not cwd), so a relative DATA_DIR path gets doubled and fails to open.
   writeFileSync(
     listPath,
     paths.map((p) => `file '${resolve(p).replaceAll("'", "'\\''")}'`).join("\n"),
   );
 }
 
+/**
+ * Builds the argv for cutting+normalizing one angle's source (single file or concat list) down to
+ * exactly [startSec, startSec + durationSec) of standardized output (scaled/padded to
+ * width×height, fps, h264/aac).
+ *
+ * `-ss`/`-t` are placed AFTER `-i` (output-side seeking) rather than before it: output-side
+ * seeking decodes from the true start and cuts frame-accurately, whereas input-side seeking snaps
+ * to the nearest keyframe — cheaper but imprecise, which would make clip boundaries drift from
+ * the requested window. This pipeline favors accuracy over speed since the whole point is
+ * cutting an exact "lance" (play) window.
+ *
+ * When the source has no audio track, a synthetic silent track (`anullsrc`) is generated and
+ * mapped in instead — this guarantees every normalized angle output has an audio stream, which
+ * the downstream combine step relies on unconditionally (`-map 0:a:0` in
+ * `combineSideBySideArgs`, and stream-identical assumptions in `combineSequentialArgs`).
+ */
 export function normalizeCutArgs(o: NormalizeOptions): string[] {
   const args = ["-hide_banner", "-y"];
   if (o.listFile) args.push("-f", "concat", "-safe", "0", "-i", o.listFile);
@@ -66,6 +98,15 @@ export function normalizeCutArgs(o: NormalizeOptions): string[] {
   return args;
 }
 
+/**
+ * Concatenates already-normalized angle outputs, in list order, via the concat demuxer with
+ * `-c copy` (stream copy, no re-encode — fast, lossless).
+ *
+ * `-c copy` is only safe here because every input to this function already went through
+ * `normalizeCutArgs`, which forces identical codec, resolution, pixel format, and fps across all
+ * angles. Stream-copy concatenation requires that compatibility; feeding it segments with
+ * differing encode parameters would produce a broken or corrupted output.
+ */
 export function combineSequentialArgs(listFile: string, output: string): string[] {
   return [
     "-hide_banner",
@@ -84,6 +125,8 @@ export function combineSequentialArgs(listFile: string, output: string): string[
   ];
 }
 
+/** Builds a `hstack` filter graph combining exactly two angle outputs into one side-by-side
+ * frame, each pane scaled/padded to half the target width. Requires re-encoding (no `-c copy`). */
 export function combineSideBySideArgs(
   inputs: [string, string],
   o: { width: number; height: number; fps: number },
@@ -123,6 +166,9 @@ export function combineSideBySideArgs(
   ];
 }
 
+/** Runs `ffmpeg` with `args`, throwing on non-zero exit. Only the last 800 chars of stderr are
+ * kept in the error — ffmpeg's stderr can be very verbose, but the actually useful failure
+ * reason is what it prints last, so the tail is what's worth surfacing in logs/errors. */
 export async function runFfmpeg(args: string[]): Promise<void> {
   const proc = Bun.spawn(["ffmpeg", ...args], { stdout: "ignore", stderr: "pipe" });
   const code = await proc.exited;
@@ -132,6 +178,9 @@ export async function runFfmpeg(args: string[]): Promise<void> {
   }
 }
 
+/** Runs `ffprobe` on `file` and extracts the fields `pipeline.ts` needs: duration, the first
+ * video stream's resolution/fps (from `r_frame_rate`'s num/den), and whether any audio stream
+ * is present. */
 export async function probe(
   file: string,
 ): Promise<{ durationSec: number; width: number; height: number; fps: number; hasAudio: boolean }> {

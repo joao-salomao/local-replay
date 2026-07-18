@@ -8,8 +8,18 @@ import type { ClipMeta, Storage } from "./storage";
 
 const log = logger("job");
 
+/**
+ * Coordinates one triggered clip end-to-end: pick the online cameras expected to upload, wait for
+ * their uploads (or a timeout), then hand off to `pipeline.ts` for ffmpeg processing. This is
+ * where the "capturing → processing → ready|error" lifecycle (see `protocol.ts#JobState`) is
+ * actually driven.
+ */
+
 export type TriggerResult = { jobId: string } | { error: "cooldown" | "no-cameras" };
 
+/** Dependency-injection bag. `hub` is narrowed to just `onlineCameraIds` (not the full `Hub`) so
+ * it's trivial to fake in tests; `processFn`/`uploadTimeoutMs`/`cooldownMs` are test-only
+ * overrides letting tests swap in a fake `processClip` and shrink real-world timeouts. */
 type Deps = {
   storage: Storage;
   config: ConfigStore;
@@ -22,6 +32,9 @@ type Deps = {
   cooldownMs?: number;
 };
 
+/** In-flight job state. `expected` is the fixed roster of camera IDs that were online at trigger
+ * time (a camera connecting later is never added); `delivered` tracks which of them have actually
+ * uploaded so far — finalize-on-completion is exactly `delivered ⊇ expected`. */
 type ActiveJob = {
   status: JobStatus;
   dir: string;
@@ -40,10 +53,21 @@ export class JobManager {
 
   constructor(private deps: Deps) {}
 
+  /** Most recent jobs, newest first. Capped by the same slice `recent` itself is maintained at
+   * (20) — an unbounded list would leak memory over a long session, and the UI only ever shows a
+   * handful (`control.ts` displays 5), so 20 is generous headroom without being unbounded. */
   jobs(): JobStatus[] {
     return this.recent.slice(0, 20);
   }
 
+  /**
+   * Starts a new clip job for every camera currently online. Rejects with `"cooldown"` (checked
+   * first, before touching storage/hub state — cheap protection against rapid button-mashing) or
+   * `"no-cameras"`. On success: eagerly creates the clip directory (so `publishRecord` can tell
+   * cameras where to upload, and `uploadDir` can validate uploads, before any bytes exist),
+   * freezes `expected` to the cameras online right now, and arms a fallback timer that finalizes
+   * the job with whatever arrived even if some expected camera never uploads.
+   */
   trigger(nowMs: number): TriggerResult {
     if (nowMs - this.lastTriggerAt < (this.deps.cooldownMs ?? 2000)) return { error: "cooldown" };
     const cameraIds = this.deps.hub.onlineCameraIds();
@@ -83,11 +107,27 @@ export class JobManager {
     return { jobId: status.jobId };
   }
 
+  /** Upload target directory for `jobId`, or `null` once the job is no longer `"capturing"`
+   * (unknown jobId, or already finalized) — `routes.ts` turns `null` into a 404 telling a
+   * late-arriving upload it missed the window. */
   uploadDir(jobId: string): string | null {
     const job = this.active.get(jobId);
     return job && job.status.state === "capturing" ? job.dir : null;
   }
 
+  /**
+   * Records one camera's uploaded angle for `jobId`. Returns `false` (→ 404 in `routes.ts`) if
+   * the job is unknown or already finalized.
+   *
+   * Idempotent per camera: if `cameraId` already delivered for this job, returns `true` without
+   * re-adding anything. This matters because `camera.ts`'s upload has its own retry logic — a
+   * request that actually succeeded server-side but whose response was lost to the client would
+   * otherwise be retried and double-pushed into `job.angles`, corrupting that camera's angle data.
+   *
+   * Triggers `finalize` as soon as every expected camera has delivered — the happy-path
+   * completion, racing against the timeout timer armed in `trigger` (see `finalize` for how that
+   * race is resolved safely).
+   */
   addUpload(jobId: string, cameraId: string, angle: RawAngle): boolean {
     const job = this.active.get(jobId);
     if (!job || job.status.state !== "capturing") return false;
@@ -99,6 +139,18 @@ export class JobManager {
     return true;
   }
 
+  /**
+   * Moves a job from "capturing" to "processing" and queues the actual ffmpeg work. Can be
+   * invoked from two places that genuinely race — the upload timeout timer, and the last
+   * `addUpload` call completing the expected roster — most obviously when the last camera's
+   * upload lands right around the timeout boundary.
+   *
+   * The `job.status.state !== "capturing"` guard is what makes that race safe: whichever caller
+   * runs first flips the state to `"processing"`; the other caller's `finalize` then sees a
+   * non-"capturing" state and no-ops immediately. Without this guard both callers would proceed —
+   * double-queuing the job, double-writing `meta.json`, and firing `onUpdate` twice with
+   * potentially interleaved results. This is the single most important invariant in this file.
+   */
   private finalize(jobId: string): void {
     const job = this.active.get(jobId);
     if (!job || job.status.state !== "capturing") return;
@@ -106,6 +158,8 @@ export class JobManager {
     job.status.state = "processing";
     log.info("processing", { jobId });
     this.deps.onUpdate({ ...job.status });
+    // Heavy ffmpeg work is serialized through the shared queue (see queue.ts) rather than run
+    // immediately, so several clips finalizing close together don't all process concurrently.
     void this.deps.queue.push(async () => {
       let finalState: "ready" | "error" = "error";
       let errorMsg = "";
@@ -114,6 +168,9 @@ export class JobManager {
         finalState = meta.state === "ready" ? "ready" : "error";
         if (finalState === "error") errorMsg = meta.errors.join("; ") || "processing failed";
       } catch (e) {
+        // Last-resort safety net: process() already catches pipeline errors internally, so
+        // reaching here means something unexpected (e.g. disk full, OOM) — the job still needs to
+        // land in a terminal state and notify clients rather than staying "processing" forever.
         errorMsg = e instanceof Error ? e.message : String(e);
       }
       job.status.state = finalState;
@@ -128,6 +185,15 @@ export class JobManager {
     });
   }
 
+  /**
+   * Runs the ffmpeg pipeline for `job` and always persists the result as `meta.json`, success or
+   * failure — `storage.listClips()` discovers clips purely by scanning for that file, so a failed
+   * job that never wrote it would be permanently invisible in the gallery with no record it was
+   * ever attempted. Zero uploads is reported as a distinct error ("no camera uploads received")
+   * rather than going through the pipeline at all. `state` becomes `"ready"` as soon as there's
+   * ANY usable output (combined or even a single angle), even alongside a non-empty `errors[]` —
+   * matching `pipeline.ts`'s per-angle partial-failure design.
+   */
   private async process(job: ActiveJob): Promise<ClipMeta> {
     const meta: ClipMeta = {
       jobId: job.status.jobId,

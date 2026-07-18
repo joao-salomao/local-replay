@@ -1,5 +1,11 @@
 import { api, isLoggedIn } from "./shared/api";
 
+/**
+ * Login page: password form that swaps to a role picker (camera/control/clips links) on success,
+ * without a page reload — and skips straight to the role picker if a valid session cookie is
+ * already present.
+ */
+
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const showRoles = () => {
   $("login-card").hidden = true;
@@ -24,4 +30,5 @@ $<HTMLFormElement>("login-form").onsubmit = async (ev) => {
   }
 };
 
+// Returning user with a still-valid session cookie: skip the password form entirely.
 if (await isLoggedIn()) showRoles();

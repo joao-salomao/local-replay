@@ -7,8 +7,19 @@ export type PageAssets = {
   assetFile(name: string): string | null;
 };
 
+// Explicit allowlist of servable built filenames. `assetFile` is reachable via routes.ts's
+// `/assets/:name` with a user-supplied `:name` — an allowlist is a simpler, stronger guard than
+// trying to path-traversal-proof an arbitrary filename, and is checked independently of it.
 const ASSET_WHITELIST = new Set(["login.js", "camera.js", "control.js", "clips.js", "app.css"]);
 
+/**
+ * Bundles the four web entrypoints (one per `PageName`) with `Bun.build` and reads their static
+ * HTML shells, returning an in-memory accessor `routes.ts` uses to serve pages/assets without
+ * touching the filesystem per request. Minification is deliberately off — this is a local/LAN
+ * tool where bundle size barely matters, and keeping stack traces/DevTools output readable is
+ * worth more than the size win. Throws if bundling fails, so a broken build fails fast at boot
+ * rather than serving broken JS to clients.
+ */
 export async function buildPages(webDir: string, outDir: string): Promise<PageAssets> {
   mkdirSync(outDir, { recursive: true });
   const entry = (p: PageName) =>

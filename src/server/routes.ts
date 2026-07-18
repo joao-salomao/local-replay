@@ -14,6 +14,13 @@ import type { Storage } from "./storage";
 
 const log = logger("http");
 
+/**
+ * Builds the HTTP route table and WebSocket handler served by `Bun.serve` (wired up in
+ * `server/index.ts`). Owns auth gating, request parsing/validation, and the two path-safety
+ * guards in this file (`/assets/:name`'s whitelist lookup via `pages.ts`, and `/files/*`'s
+ * traversal guard below) — Hub itself (`hub.ts`) stays unaware of HTTP/auth concerns.
+ */
+
 export type AppContext = {
   dataDir: string;
   config: ConfigStore;
@@ -38,7 +45,9 @@ const json = (data: unknown, status = 200, headers: Record<string, string> = {})
 const html = (body: string) =>
   new Response(body, { headers: { "content-type": "text/html; charset=utf-8" } });
 
+/** Builds the `{ routes, fetch, websocket }` triple passed straight to `Bun.serve`. */
 export function createApp(ctx: AppContext) {
+  // Thin adapter: routes.ts owns the Bun-specific WS wiring, Hub owns the protocol logic.
   const websocket: WebSocketHandler<WSData> = {
     open: (ws) => ctx.hub.open(ws),
     message: (ws, raw) => ctx.hub.message(ws, raw, Date.now()),
@@ -47,6 +56,10 @@ export function createApp(ctx: AppContext) {
 
   const isAuthed = (req: Request) =>
     ctx.auth.verify(tokenFromCookie(req.headers.get("cookie")), Date.now());
+  // Two guards, two different "not authed" behaviors: JSON API routes need a 401 JSON body a
+  // fetch()-based caller can read and show an error for; page routes need a redirect to "/" so an
+  // unauthenticated browser landing on e.g. /camera ends up back at the login page, not staring
+  // at raw JSON.
   const requireAuth =
     (
       handler: (
@@ -80,6 +93,8 @@ export function createApp(ctx: AppContext) {
       },
     },
 
+    // Intentionally NOT requireAuth-gated: a device needs to download and trust this cert BEFORE
+    // it can complete a working HTTPS connection to reach the login page at all (chicken-and-egg).
     "/cert": {
       GET: () => {
         const certPath = join(ctx.dataDir, "certs", "cert.pem");
@@ -103,7 +118,14 @@ export function createApp(ctx: AppContext) {
 
     "/api/login": {
       POST: async (req: Request, server: Server<WSData>) => {
-        // last hop = the fronting proxy's observed peer IP; earlier entries are client-forgeable
+        // X-Forwarded-For is a comma-separated list each proxy hop APPENDS to. The first entry is
+        // whatever the original request claimed and is trivially spoofable by the client; only
+        // the LAST entry — appended by the proxy Bun's own TCP connection actually came from — is
+        // something an attacker can't forge. Only trusted at all under trustProxy (BEHIND_PROXY);
+        // in LAN mode there's no trusted intermediary, so the real TCP peer IP is used instead.
+        // Getting this wrong breaks the login rate limiter below: trusting a spoofable header
+        // makes it bypassable, trusting the wrong hop makes it lump every client behind the proxy
+        // into one bucket.
         const ip = ctx.trustProxy
           ? req.headers.get("x-forwarded-for")?.split(",").pop()?.trim() || "unknown"
           : (server.requestIP(req)?.address ?? "unknown");
@@ -144,6 +166,8 @@ export function createApp(ctx: AppContext) {
         if (!CLIP_DURATION_OPTIONS.includes(body.seconds ?? -1))
           return json({ error: "invalid seconds" }, 400);
         ctx.config.setClipDuration(body.seconds!);
+        // Config changes aren't something Hub can detect on its own (they don't flow through any
+        // WS message) — routes.ts has to explicitly ask for a state broadcast here.
         ctx.hub.onStateChanged();
         log.info("clip duration changed", { seconds: ctx.config.value.clipDurationSeconds });
         return json({ clipDurationSeconds: ctx.config.value.clipDurationSeconds });
@@ -165,6 +189,9 @@ export function createApp(ctx: AppContext) {
       GET: requireAuth(() => json(ctx.storage.listClips())),
     },
 
+    // Validates every field defensively before writing anything to disk; `addUpload` itself is
+    // idempotent per camera (see clip-job.ts), so a client-side retry of a request that actually
+    // succeeded server-side is safe to resubmit here.
     "/api/clips/:jobId/upload": {
       POST: requireAuth(async (req) => {
         const jobId = req.params.jobId;
@@ -219,6 +246,15 @@ export function createApp(ctx: AppContext) {
       }),
     },
 
+    // Path-traversal guard: `normalize` collapses any `..`/`.` segments in the user-supplied
+    // suffix before `resolve` anchors it to an absolute path, so `target` can never be a raw
+    // ".."-laden string when it's checked below — checking the prefix on a non-normalized path
+    // would be trivially bypassable (e.g. a target that literally starts with the clipsRoot
+    // string while ".." segments later escape outside it). The check itself compares against
+    // `clipsRoot + "/"`, not just `clipsRoot` — without the trailing slash, a sibling directory
+    // that merely shares the string prefix (e.g. "<dataDir>/clips-backup") would wrongly pass.
+    // Both failure modes (escaped the root, or simply missing) return the same 404 so the
+    // response never leaks which case occurred.
     "/files/*": {
       GET: requireAuth((req) => {
         const path = new URL(req.url).pathname;

@@ -15,8 +15,13 @@ import type { ClipCamera, ClipOutputs } from "./storage";
 
 const log = logger("ffmpeg");
 
+/** One camera's raw uploaded segments for a clip, prior to normalization. `files` are on disk
+ * already (written by `routes.ts`'s upload handler) but not yet probed for duration/audio. */
 export type RawAngle = { name: string; slug: string; files: { path: string; startMs: number }[] };
 
+/** Turns a display name into a filesystem/URL-safe slug: strips accents (NFD decompose + drop
+ * combining marks), lowercases, collapses non-alphanumerics to `-`, trims edge dashes. Falls back
+ * to `"camera"` if that leaves nothing (e.g. a name that was pure punctuation/emoji). */
 export function slugify(name: string): string {
   return (
     name
@@ -28,6 +33,18 @@ export function slugify(name: string): string {
   );
 }
 
+/**
+ * Orchestrates turning a job's raw per-camera uploads into the final clip outputs: for each
+ * angle, probe \u2192 compute the cut window \u2192 normalize (cut+scale+encode) \u2192 collect; then combine
+ * all successful angles into `combined.mp4` (copy-through for one angle, side-by-side or
+ * sequential concat for two or more, per `config.layout`).
+ *
+ * One angle's failure does not abort the clip: each angle runs in its own try/catch, and a
+ * failure is recorded in `errors` while the other angles still proceed \u2014 partial success (some
+ * angles ready, others failed) is a first-class outcome here, surfaced by the caller
+ * (`clip-job.ts`) as `state: "ready"` with `errors` populated, as long as at least one output
+ * exists.
+ */
 export async function processClip(o: {
   clipDir: string;
   t: number;

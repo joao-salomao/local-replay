@@ -2,13 +2,28 @@ import type { ServerWebSocket } from "bun";
 import { logger } from "./log";
 import type { CameraInfo, ClientMessage, ServerMessage } from "../shared/protocol";
 
+/**
+ * Central WebSocket connection and camera-registry manager: dispatches `ClientMessage`s, tracks
+ * which cameras are connected/online, and decides when a broadcast-worthy state change happened.
+ * Hub doesn't hold a reference to the Bun `Server` (that would be circular — routes.ts needs Hub
+ * to build the websocket handler, and Hub would need the Server to `publish`), so it exposes
+ * `onStateChanged` as a hook instead: `server/index.ts` wires it to the actual broadcast.
+ */
+
+/** Per-connection mutable state Bun attaches to each `ServerWebSocket`. */
 export type WSData = { role?: "camera" | "control"; cameraId?: string };
+/** Pub/sub topic every connection joins on open — carries `state`/`jobUpdate` broadcasts. */
 export const TOPIC_ALL = "all";
+/** Pub/sub topic only camera connections join — carries `record` triggers (control clients don't
+ * need them). */
 export const TOPIC_CAMERAS = "cameras";
+/** No heartbeat/message from a camera within this window ⇒ considered offline (see `sweep`). */
 export const OFFLINE_AFTER_MS = 10_000;
 
 const log = logger("hub");
 
+/** Server-only camera bookkeeping: `info` is the public `CameraInfo` broadcast to clients,
+ * `lastSeen` is liveness tracking that never leaves the server. */
 type CameraConn = { info: CameraInfo; lastSeen: number };
 
 export class Hub {
@@ -23,10 +38,14 @@ export class Hub {
     return [...this.camerasById.values()].filter((c) => c.info.online).map((c) => c.info.id);
   }
 
+  /** Every new connection joins `TOPIC_ALL` immediately, before its role is even known — it
+   * needs to receive `state`/`jobUpdate` broadcasts regardless of whether it turns out to be a
+   * camera or a control client. Role-specific topics (`TOPIC_CAMERAS`) are joined on `register`. */
   open(ws: ServerWebSocket<WSData>): void {
     ws.subscribe(TOPIC_ALL);
   }
 
+  /** Dispatches one parsed `ClientMessage`. Malformed JSON is silently dropped. */
   message(ws: ServerWebSocket<WSData>, raw: string | Buffer, nowMs: number): void {
     let msg: ClientMessage;
     try {
@@ -62,6 +81,8 @@ export class Hub {
       this.onStateChanged();
       return;
     }
+    // Remaining message types (cameraStatus, hb) only make sense for an already-registered
+    // camera; anything else (unregistered connections, control connections) is a no-op here.
     const cam = ws.data.cameraId ? this.camerasById.get(ws.data.cameraId) : undefined;
     if (!cam) return;
     cam.lastSeen = nowMs;
@@ -83,10 +104,16 @@ export class Hub {
     }
   }
 
+  /** Drops the camera on disconnect (control connections have no registry entry to remove, so
+   * closing one never triggers a broadcast here). */
   close(ws: ServerWebSocket<WSData>): void {
     if (ws.data.cameraId && this.camerasById.delete(ws.data.cameraId)) this.onStateChanged();
   }
 
+  /** Periodic staleness sweep (driven by `server/index.ts`'s interval) marking cameras offline
+   * once `OFFLINE_AFTER_MS` passes without any message. Coming back online is intentionally not
+   * handled here — that transition is only ever observed (and logged) via `message()`, the
+   * moment a message from that camera actually arrives. */
   sweep(nowMs: number): void {
     let changed = false;
     for (const cam of this.camerasById.values()) {

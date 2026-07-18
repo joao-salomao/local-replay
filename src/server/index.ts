@@ -15,6 +15,16 @@ import type { ServerMessage } from "../shared/protocol";
 
 const log = logger("server");
 
+/**
+ * Composition root: reads env config, wires every singleton together (config, storage, hub,
+ * queue, auth, jobs, the HTTP/WS app), then starts one or two `Bun.serve` listeners depending on
+ * mode. See the `behindProxy` branch below for the two supported deployment modes.
+ *
+ * Env vars: DATA_DIR (persisted state root), HTTPS_PORT/HTTP_PORT (LAN mode's dual listeners),
+ * BEHIND_PROXY (switches to proxy mode — plain HTTP on PORT, no self-signed cert), PUBLIC_URL
+ * (the URL to print/QR-code in proxy mode, since there's no LAN IP to infer it from), HOST_LAN_IP
+ * (LAN mode: the IP baked into the cert's SAN and shown in the entry URL).
+ */
 const dataDir = process.env.DATA_DIR ?? "data";
 const httpsPort = Number(process.env.HTTPS_PORT ?? 8443);
 const httpPort = Number(process.env.HTTP_PORT ?? 8080);
@@ -26,6 +36,11 @@ const config = ConfigStore.load(dataDir);
 const storage = new Storage(dataDir);
 const hub = new Hub();
 const queue = new SerialQueue();
+// `ctx.jobs` is patched in below, right after construction: `AppContext` (read by createApp/
+// routes.ts) needs a `jobs: JobManager`, but JobManager's own callbacks need to call
+// `server.publish` — and `server` doesn't exist until `Bun.serve()` runs further down, which
+// itself needs `createApp(ctx)`. The placeholder cast breaks that ordering knot the same way the
+// `server` forward reference below does: it's only ever read after everything is fully wired.
 const ctx: AppContext = {
   dataDir,
   config,
@@ -60,7 +75,10 @@ let server: Server<WSData>;
 
 if (behindProxy) {
   // Proxy mode: the reverse proxy (Caddy/nginx/Cloudflare) terminates TLS and forwards plain HTTP.
-  // No self-signed cert, no redirect server — just one plain-HTTP listener on PORT.
+  // No self-signed cert, no redirect server — just one plain-HTTP listener on PORT. Doing our own
+  // TLS here too would be redundant (the proxy already speaks HTTPS to the outside world) and the
+  // common reverse-proxy pattern is plain HTTP on the backend hop, so all of cert.ts's self-signed
+  // cert / dual-port dance is skipped entirely in this mode.
   server = Bun.serve({
     port,
     routes: app.routes,
@@ -78,6 +96,9 @@ if (behindProxy) {
     websocket: app.websocket,
   });
 
+  // Plain-HTTP listener whose only job is bouncing to HTTPS: a LAN device that typed "http://" or
+  // followed a stale bookmark/link would otherwise hit a connection error instead of being routed
+  // to the working URL. Preserves the original pathname + query string in the redirect target.
   Bun.serve({
     port: httpPort,
     fetch(req) {
@@ -90,6 +111,8 @@ if (behindProxy) {
   });
 }
 
+// This is where Hub's onStateChanged hook (see hub.ts) resolves into an actual broadcast: Hub
+// itself can't call server.publish (no reference to the Server), so it calls this instead.
 function publishState(): void {
   const state: ServerMessage = {
     type: "state",
@@ -104,6 +127,8 @@ function publishState(): void {
 hub.onStateChanged = publishState;
 
 log.debug("sweep interval started", { intervalMs: 2_000 });
+// Drives hub.ts's offline-detection sweep. Polled every 2s against OFFLINE_AFTER_MS (10s), so an
+// unresponsive camera is detected within roughly 10-12s, not instantly but with a bounded delay.
 setInterval(() => hub.sweep(Date.now()), 2_000);
 
 function runRetentionCleanup(): void {
@@ -112,7 +137,7 @@ function runRetentionCleanup(): void {
     log.info("retention cleanup", { removed: deleted.length });
   }
 }
-runRetentionCleanup();
+runRetentionCleanup(); // catch up immediately on anything missed while the server was down
 setInterval(runRetentionCleanup, 24 * 60 * 60 * 1000);
 
 let entryUrl: string;

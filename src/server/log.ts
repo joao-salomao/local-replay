@@ -8,6 +8,8 @@
 // deliberately only accepts a short message plus flat, primitive fields — no "dump this
 // object" convenience — so it's harder to accidentally leak something sensitive.
 
+/** Flat, primitive-only structured fields attached to a log line — see the file header for why
+ * this is deliberately not "pass any object". */
 export type LogFields = Record<string, string | number | boolean>;
 export type Logger = {
   debug: (message: string, fields?: LogFields) => void;
@@ -16,6 +18,8 @@ export type Logger = {
   error: (message: string, fields?: LogFields) => void;
 };
 
+// Array order encodes severity ranking, least to most severe (plus the "silent" sentinel last):
+// threshold filtering in `emit` is just an `indexOf` comparison against this order.
 const LEVELS = ["debug", "info", "warn", "error", "silent"] as const;
 type Level = (typeof LEVELS)[number];
 type ActiveLevel = Exclude<Level, "silent">;
@@ -40,6 +44,8 @@ function emit(level: ActiveLevel, scope: string, message: string, fields?: LogFi
   else console.error(line);
 }
 
+/** Creates a `Logger` that tags every line with `scope` (e.g. the module name) — see the file
+ * header for the level threshold, formatting, and no-secrets rules that apply to every call. */
 export function logger(scope: string): Logger {
   return {
     debug: (message, fields) => emit("debug", scope, message, fields),
