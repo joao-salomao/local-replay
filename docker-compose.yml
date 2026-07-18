@@ -1,11 +1,23 @@
 services:
   replay:
     build: .
+    # Published ports track HTTPS_PORT/HTTP_PORT so overriding them in .env stays consistent (this is
+    # the LAN-mode compose; a reverse-proxy setup publishes PORT instead — see the README).
     ports:
-      - "8443:8443"
-      - "8080:8080"
+      - "${HTTPS_PORT:-8443}:${HTTPS_PORT:-8443}"
+      - "${HTTP_PORT:-8080}:${HTTP_PORT:-8080}"
+    # Host ./data is mounted at the container's DATA_DIR, so persistence follows a DATA_DIR override too.
     volumes:
-      - ./data:/app/data
+      - ./data:/app/${DATA_DIR:-data}
+    # Every variable from .env.example, each defaulting to its standard value. Put any override in a
+    # .env file next to this compose file — Compose loads it automatically.
     environment:
+      - DATA_DIR=${DATA_DIR:-data}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - HTTPS_PORT=${HTTPS_PORT:-8443}
+      - HTTP_PORT=${HTTP_PORT:-8080}
       - HOST_LAN_IP=${HOST_LAN_IP:-}
+      - BEHIND_PROXY=${BEHIND_PROXY:-}
+      - PUBLIC_URL=${PUBLIC_URL:-}
+      - PORT=${PORT:-8080}
     restart: unless-stopped
