@@ -1,0 +1,11 @@
+services:
+  replay:
+    build: .
+    ports:
+      - "8443:8443"
+      - "8080:8080"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - HOST_LAN_IP=${HOST_LAN_IP:-}
+    restart: unless-stopped
