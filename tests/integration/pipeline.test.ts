@@ -496,6 +496,11 @@ describe("processClip", () => {
       .filter(Boolean).length;
     expect(packetCount).toBeLessThanOrEqual(Math.round(windowSec * config.targetFps));
 
+    // Discrimination check: the declared duration must match the ACTUAL frame count (not just
+    // be bounded above by the window). Pre-fix, durationSec was 10.0 while packetCount/fps was
+    // ~1.0 (bloat). Post-fix, both are ~1.0. This assertion would fail on the old normalizeCutArgs.
+    expect(angle.durationSec).toBeCloseTo(packetCount / config.targetFps, 1);
+
     // Decodes clean end to end: no "missing picture in access unit" / PPS-reference errors.
     const decodeProc = Bun.spawn(["ffmpeg", "-v", "error", "-i", angleOut, "-f", "null", "-"], {
       stdout: "ignore",
@@ -507,5 +512,27 @@ describe("processClip", () => {
     // The combined clip (a straight copy for a single angle) inherits the same guarantees.
     const combined = await probe(join(clipDir, "combined.mp4"));
     expect(combined.durationSec).toBeLessThanOrEqual(windowSec + 0.5);
+
+    // The combined clip's duration must also be consistent with its actual frame count.
+    const combinedCountProc = Bun.spawn(
+      [
+        "ffprobe",
+        "-v",
+        "error",
+        "-select_streams",
+        "v",
+        "-show_entries",
+        "packet=pts_time",
+        "-of",
+        "csv=p=0",
+        join(clipDir, "combined.mp4"),
+      ],
+      { stdout: "pipe" },
+    );
+    const combinedPacketCount = (await new Response(combinedCountProc.stdout).text())
+      .trim()
+      .split("\n")
+      .filter(Boolean).length;
+    expect(combined.durationSec).toBeCloseTo(combinedPacketCount / config.targetFps, 1);
   }, 180_000);
 });
