@@ -49,9 +49,24 @@ function render(): void {
   $("cam-list").innerHTML = state.cameras
     .map(
       (c) =>
-        `<li>${c.online ? "🟢" : "🔴"} ${esc(c.name)}${c.deviceLabel ? ` · ${esc(c.deviceLabel)}` : ""} — ${c.width}×${c.height}@${c.fps}fps</li>`,
+        `<li><span>${c.online ? "🟢" : "🔴"} ${esc(c.name)}${c.deviceLabel ? ` · ${esc(c.deviceLabel)}` : ""} — ${c.width}×${c.height}@${c.fps}fps</span><button type="button" class="cam-remove" data-remove="${esc(c.id)}" title="Remover câmera" aria-label="Remover câmera">✕</button></li>`,
     )
     .join("");
+  $("cam-list")
+    .querySelectorAll<HTMLButtonElement>("button[data-remove]")
+    .forEach((b) => {
+      b.addEventListener("click", async () => {
+        const id = b.dataset.remove!;
+        const cam = state.cameras.find((c) => c.id === id);
+        if (
+          !window.confirm(
+            `Remover a câmera "${cam?.name ?? ""}"? O aparelho volta pra tela de escolha.`,
+          )
+        )
+          return;
+        await api(`/api/cameras/${id}/remove`, { method: "POST" });
+      });
+    });
   $("durations").innerHTML = DURATIONS.map(
     (d) =>
       `<button type="button" data-d="${d}" class="${d === state.clipDurationSeconds ? "active" : ""}">${d}s</button>`,

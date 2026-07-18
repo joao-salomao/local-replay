@@ -27,7 +27,7 @@ const log = logger("hub");
 
 /** Server-only camera bookkeeping: `info` is the public `CameraInfo` broadcast to clients,
  * `lastSeen` is liveness tracking that never leaves the server. */
-type CameraConn = { info: CameraInfo; lastSeen: number };
+type CameraConn = { info: CameraInfo; lastSeen: number; ws: ServerWebSocket<WSData> };
 
 export class Hub {
   private camerasById: Map<string, CameraConn>;
@@ -60,6 +60,24 @@ export class Hub {
 
   onlineCameraIds(): string[] {
     return [...this.camerasById.values()].filter((c) => c.info.online).map((c) => c.info.id);
+  }
+
+  /**
+   * Removes a camera at the control page's request: tells that one connection to go back to the
+   * role picker (a `removed` message the camera page acts on by redirecting, rather than
+   * auto-reconnecting), closes the socket, drops it from the registry, and broadcasts the new
+   * state. The later socket-`close` event finds it already gone, so there's no double broadcast.
+   * Returns false if no camera with that id is connected.
+   */
+  removeCamera(id: string): boolean {
+    const cam = this.camerasById.get(id);
+    if (!cam) return false;
+    cam.ws.send(JSON.stringify({ type: "removed" } satisfies ServerMessage));
+    cam.ws.close();
+    this.camerasById.delete(id);
+    log.info("camera removed", { id, name: cam.info.name });
+    this.stateChangedListener();
+    return true;
   }
 
   /** Every new connection joins `TOPIC_ALL` immediately, before its role is even known — it
@@ -95,6 +113,7 @@ export class Hub {
         this.camerasById.set(id, {
           info: { id, name: msg.name, online: true, width: 0, height: 0, fps: 0, deviceLabel: "" },
           lastSeen: nowMs,
+          ws,
         });
         const reply: ServerMessage = { type: "registered", cameraId: id };
         ws.send(JSON.stringify(reply));

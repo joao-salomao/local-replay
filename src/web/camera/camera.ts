@@ -263,6 +263,10 @@ async function uploadClip(
  * gap), the trigger is not queued anywhere and is effectively missed.
  */
 function handleMessage(msg: ServerMessage): void {
+  if (msg.type === "removed") {
+    location.href = "/"; // control removed this camera — go back to the role picker
+    return;
+  }
   if (msg.type === "registered") {
     cameraId = msg.cameraId;
     reportStatus();

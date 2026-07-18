@@ -200,6 +200,16 @@ export function createApp(ctx: AppContext) {
       }),
     },
 
+    // Control removes a connected camera by id: the camera's own page gets a `removed` message and
+    // redirects back to the role picker (see `hub.ts#removeCamera` and `web/camera/camera.ts`).
+    "/api/cameras/:id/remove": {
+      POST: requireAuth((req) =>
+        ctx.hub.removeCamera(req.params.id)
+          ? json({ ok: true })
+          : json({ error: "unknown camera" }, 404),
+      ),
+    },
+
     "/api/state": {
       GET: requireAuth(() =>
         json({

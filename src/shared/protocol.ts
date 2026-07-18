@@ -65,6 +65,8 @@ export type ClientMessage =
  * - `ntpReply`: reply to `ntp`, echoing the client's send time alongside the server's clock reading.
  * - `record`: broadcast to camera connections only (TOPIC_CAMERAS) — directs cameras to finish
  *   their current segment and upload the window ending at `t` (see `hub.ts`, `clip-job.ts`).
+ * - `removed`: sent to a SINGLE camera connection when the control page removes it — the camera
+ *   page redirects back to the role picker (`/`) instead of auto-reconnecting.
  * - `state`: full state broadcast to all connections (TOPIC_ALL) — cameras, config, recent jobs,
  *   free disk. Sent on any real change, not on a fixed interval (see `hub.ts#onStateChanged`).
  * - `jobUpdate`: incremental broadcast to all connections when a single job's status changes,
@@ -77,6 +79,7 @@ export type ServerMessage =
   | { type: "registered"; cameraId: string }
   | { type: "ntpReply"; clientTime: number; serverTime: number }
   | { type: "record"; jobId: string; t: number; windowSec: number }
+  | { type: "removed" }
   | {
       type: "state";
       cameras: CameraInfo[];

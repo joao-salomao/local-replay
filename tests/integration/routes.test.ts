@@ -294,6 +294,36 @@ describe("routes", () => {
     app.ctx.hub.close(fakeWs); // return the shared hub to zero cameras for other tests
   });
 
+  it("removes a connected camera by id and 404s an unknown one", async () => {
+    const cookie = await login();
+    const fakeWs = {
+      data: {} as WSData,
+      send() {},
+      subscribe() {},
+      close() {},
+    } as unknown as ServerWebSocket<WSData>;
+    app.ctx.hub.open(fakeWs);
+    app.ctx.hub.message(
+      fakeWs,
+      JSON.stringify({ type: "register", role: "camera", name: "Kickable" }),
+      Date.now(),
+    );
+    const id = app.ctx.hub.cameras().find((c) => c.name === "Kickable")!.id;
+
+    const unknown = await fetch(`${base}/api/cameras/does-not-exist/remove`, {
+      method: "POST",
+      headers: { cookie },
+    });
+    expect(unknown.status).toBe(404);
+
+    const ok = await fetch(`${base}/api/cameras/${id}/remove`, {
+      method: "POST",
+      headers: { cookie },
+    });
+    expect(ok.status).toBe(200);
+    expect(app.ctx.hub.cameras().some((c) => c.id === id)).toBe(false); // gone from the registry
+  });
+
   it("keys the login rate limiter off X-Forwarded-For when behind a proxy", async () => {
     // dedicated instance: trustProxy on + a tight limiter, so the test is deterministic and
     // isolated from the shared `app` above (which uses a permissive 100/min limiter)

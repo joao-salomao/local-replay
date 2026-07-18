@@ -5,12 +5,16 @@ import type { ServerWebSocket } from "bun";
 function fakeWs() {
   const sent: string[] = [];
   const topics: string[] = [];
+  let closed = false;
   const ws = {
     data: {} as WSData,
     send: (m: string) => sent.push(m),
     subscribe: (t: string) => topics.push(t),
+    close: () => {
+      closed = true;
+    },
   } as unknown as ServerWebSocket<WSData>;
-  return { ws, sent, topics };
+  return { ws, sent, topics, closed: () => closed };
 }
 
 describe("Hub", () => {
@@ -139,6 +143,25 @@ describe("Hub", () => {
     hub.message(ws, JSON.stringify({ type: "register", role: "camera", name: "A" }), 0);
     hub.close(ws);
     expect(hub.cameras()).toEqual([]);
+  });
+
+  it("removeCamera kicks the camera: sends `removed`, closes the socket, drops it, rebroadcasts", () => {
+    const hub = new Hub();
+    const { ws, sent, closed } = fakeWs();
+    hub.open(ws);
+    hub.message(ws, JSON.stringify({ type: "register", role: "camera", name: "Fundo" }), 0);
+    const id = JSON.parse(sent[0]!).cameraId;
+    let changes = 0;
+    hub.setOnStateChanged(() => changes++);
+
+    expect(hub.removeCamera("nope")).toBe(false); // unknown id: no-op, no broadcast
+    expect(changes).toBe(0);
+
+    expect(hub.removeCamera(id)).toBe(true);
+    expect(JSON.parse(sent.at(-1)!)).toEqual({ type: "removed" }); // the camera is told to leave
+    expect(closed()).toBe(true); // its socket is closed
+    expect(hub.cameras()).toEqual([]); // dropped from the registry
+    expect(changes).toBe(1); // state rebroadcast exactly once
   });
 
   it("control registration does not create a camera and subscribes to TOPIC_CONTROLS, not TOPIC_CAMERAS", () => {
