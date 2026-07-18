@@ -1,0 +1,2 @@
+# Keeps the data/ directory in the repo so a fresh clone already has somewhere for the server to
+# write its certs/ and clips/ on first run. Everything else under data/ is gitignored (see .gitignore).

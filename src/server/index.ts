@@ -1,3 +1,4 @@
+import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import type { LogEntry, ServerMessage } from "@shared/protocol";
 import type { Server } from "bun";
@@ -34,6 +35,10 @@ const httpPort = Number(process.env.HTTP_PORT ?? 8080);
 const behindProxy = /^(1|true|yes)$/i.test(process.env.BEHIND_PROXY ?? "");
 const publicUrl = process.env.PUBLIC_URL;
 const port = Number(process.env.PORT ?? 8080);
+
+// Ensure the data dir exists before anything writes into it (certs, bundled web assets, clips).
+// Config and auth no longer create it as a side effect — they're env-only now — so do it here.
+mkdirSync(dataDir, { recursive: true });
 
 const config = ConfigStore.fromEnv();
 const storage = new Storage(dataDir);
