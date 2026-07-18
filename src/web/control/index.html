@@ -7,41 +7,45 @@
   <link rel="stylesheet" href="/assets/app.css" />
 </head>
 <body>
-  <h1>🔴 Controle</h1>
-  <div class="banner" id="disk-banner" hidden></div>
-  <div class="card">
-    <button type="button" id="record" class="record-btn danger" disabled>GRAVAR</button>
-    <div class="error" id="record-error"></div>
-    <p class="row"><span class="status-dot" id="conn-dot"></span><span id="cam-count">0 câmera(s) online</span></p>
-    <p class="muted" id="cam-hint" hidden>Nenhuma câmera online — abra /camera em um celular</p>
-    <ul id="cam-list" class="muted"></ul>
-  </div>
-  <div class="card">
-    <p class="muted">Duração do clipe</p>
-    <div class="seg" id="durations"></div>
-  </div>
-  <div class="card">
-    <p class="muted">Últimos lances</p>
-    <ul id="jobs"></ul>
-  </div>
-  <div class="card">
-    <p class="muted">Entrar no sistema</p>
-    <img id="qr" alt="QR code" style="width:100%;max-width:240px;background:#fff;border-radius:8px" />
-  </div>
-  <details class="card" id="log-section">
-    <summary>Logs do servidor</summary>
-    <div class="log-controls">
-      <select id="log-level">
-        <option value="all">Todos</option>
-        <option value="debug">debug</option>
-        <option value="info">info</option>
-        <option value="warn">warn</option>
-        <option value="error">error</option>
-      </select>
-      <button type="button" id="log-clear">Limpar</button>
+  <div class="page page--wide">
+    <h1>🔴 Controle</h1>
+    <div class="banner" id="disk-banner" hidden></div>
+    <div class="control-grid">
+      <div class="card card-record">
+        <button type="button" id="record" class="record-btn danger" disabled>GRAVAR</button>
+        <div class="error" id="record-error"></div>
+        <p class="row"><span class="status-dot" id="conn-dot"></span><span id="cam-count">0 câmera(s) online</span></p>
+        <p class="muted" id="cam-hint" hidden>Nenhuma câmera online — abra /camera em um celular</p>
+        <ul id="cam-list" class="muted cam-list"></ul>
+      </div>
+      <div class="card card-duration">
+        <p class="muted">Duração do clipe</p>
+        <div class="seg" id="durations"></div>
+      </div>
+      <div class="card card-jobs">
+        <p class="muted">Últimos lances</p>
+        <ul id="jobs" class="jobs-list"></ul>
+      </div>
+      <div class="card card-qr">
+        <p class="muted">Entrar no sistema</p>
+        <img id="qr" alt="QR code" class="qr-code" />
+      </div>
+      <details class="card card-logs" id="log-section">
+        <summary>Logs do servidor</summary>
+        <div class="log-controls">
+          <select id="log-level">
+            <option value="all">Todos</option>
+            <option value="debug">debug</option>
+            <option value="info">info</option>
+            <option value="warn">warn</option>
+            <option value="error">error</option>
+          </select>
+          <button type="button" id="log-clear">Limpar</button>
+        </div>
+        <div id="log-view" class="log-view"></div>
+      </details>
     </div>
-    <div id="log-view" class="log-view"></div>
-  </details>
+  </div>
   <script type="module" src="/assets/control.js"></script>
 </body>
 </html>

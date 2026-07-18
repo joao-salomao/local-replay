@@ -1,164 +1,551 @@
-* {
+/*
+ * Single stylesheet for all four pages (login, camera, control, clips). Self-contained by design
+ * (no external fonts/CSS/JS/images — the app runs offline on a LAN): system font stack only, every
+ * rule inlined here. Mobile-first: base rules target phones, `@media` blocks near the bottom layer
+ * on tablet/desktop refinements. Spacing/color/radius are all CSS custom properties so the whole
+ * app shares one consistent rhythm and palette.
+ */
+
+:root {
+  color-scheme: dark;
+
+  --color-bg: #0d1117;
+  --color-surface: #161b22;
+  --color-surface-2: #1c2128;
+  --color-surface-3: #22272e;
+  --color-border: #30363d;
+  --color-border-strong: #3d444d;
+
+  --color-text: #e6edf3;
+  --color-text-muted: #8b949e;
+  --color-text-dim: #6e7681;
+
+  --color-primary: #238636;
+  --color-primary-hover: #2ea043;
+  --color-danger: #da3633;
+  --color-danger-hover: #f85149;
+  --color-info: #1f6feb;
+  --color-info-hover: #388bfd;
+
+  --color-warning-bg: #6e2c00;
+  --color-warning-border: #f0883e;
+  --color-dot-on: #3fb950;
+  --color-dot-off: #f85149;
+
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-pill: 999px;
+
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+/* ---------- Reset & base ---------- */
+
+*,
+*::before,
+*::after {
   box-sizing: border-box;
+}
+* {
   margin: 0;
 }
+html {
+  -webkit-text-size-adjust: 100%;
+}
 body {
-  font-family: system-ui, sans-serif;
-  background: #0d1117;
-  color: #e6edf3;
+  font-family: var(--font-sans);
+  background: var(--color-bg);
+  color: var(--color-text);
   min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 16px;
+  line-height: 1.45;
+  padding: var(--space-4);
 }
-h1 {
-  font-size: 1.3rem;
-  margin: 12px 0;
+ul {
+  list-style: none;
+  padding: 0;
 }
-.card {
-  background: #161b22;
-  border: 1px solid #30363d;
-  border-radius: 12px;
-  padding: 16px;
-  width: 100%;
-  max-width: 460px;
-  margin-bottom: 12px;
+img,
+video {
+  max-width: 100%;
 }
-input,
-select {
-  width: 100%;
-  padding: 12px;
-  border-radius: 8px;
-  border: 1px solid #30363d;
-  background: #0d1117;
+a {
   color: inherit;
-  font-size: 1rem;
 }
-button {
-  width: 100%;
-  padding: 14px;
-  border: 0;
-  border-radius: 10px;
-  background: #238636;
-  color: #fff;
-  font-size: 1.1rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-button:disabled {
-  background: #30363d;
-  cursor: not-allowed;
-}
-button.danger {
-  background: #da3633;
-}
-.row {
-  display: flex;
-  gap: 8px;
-  align-items: center;
+
+/* ---------- Typography ---------- */
+
+h1 {
+  font-size: clamp(1.3rem, 4vw, 1.6rem);
+  font-weight: 700;
+  letter-spacing: -0.01em;
 }
 .muted {
-  color: #8b949e;
+  color: var(--color-text-muted);
   font-size: 0.85rem;
 }
 .error {
   color: #ff7b72;
-  margin-top: 8px;
   min-height: 1.2em;
+  font-size: 0.9rem;
 }
+.link {
+  color: var(--color-info);
+}
+
+/* ---------- Layout ---------- */
+
+.page {
+  width: 100%;
+  max-width: 34rem;
+  margin-inline: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+/* `.page--wide` grows at wider breakpoints (see bottom); on mobile it matches `.page`. */
+.page--wide {
+  max-width: 34rem;
+}
+
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+/* `#roles`/`#live` are `.card`s toggled via the plain `hidden` attribute. Without this, `.card`'s
+ * own `display: flex` (an author-origin rule) always beats the UA stylesheet's default
+ * `[hidden] { display: none }` regardless of specificity, because author rules outrank
+ * user-agent rules in the cascade. `.card[hidden]` (specificity 0,2,0) beats plain `.card`
+ * (0,1,0) for the `display` property, so this restores the native hidden behavior without
+ * reaching for `!important`. */
+.card[hidden] {
+  display: none;
+}
+
+.row {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+
 .banner {
-  background: #6e2c00;
-  border: 1px solid #f0883e;
-  border-radius: 8px;
-  padding: 10px;
-  margin-bottom: 10px;
-  width: 100%;
-  max-width: 460px;
+  background: var(--color-warning-bg);
+  border: 1px solid var(--color-warning-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
 }
-video {
-  width: 100%;
-  border-radius: 8px;
-  background: #000;
+
+/* ---------- Forms ---------- */
+
+.field-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
 }
+input,
+select {
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: inherit;
+  font-size: 1rem;
+  font-family: inherit;
+}
+input::placeholder {
+  color: var(--color-text-dim);
+}
+input:focus-visible,
+select:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--color-info-hover);
+  outline-offset: 2px;
+}
+
+/* ---------- Buttons ---------- */
+
+button {
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0.75rem 1rem;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--color-primary);
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition:
+    filter 0.15s ease,
+    transform 0.05s ease,
+    box-shadow 0.15s ease;
+}
+button:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+button:active:not(:disabled) {
+  transform: scale(0.98);
+}
+button:focus-visible {
+  outline: 2px solid var(--color-info-hover);
+  outline-offset: 2px;
+}
+button.danger {
+  background: var(--color-danger);
+}
+button.info {
+  background: var(--color-info);
+}
+button:disabled {
+  background: var(--color-border);
+  color: var(--color-text-dim);
+  cursor: not-allowed;
+  filter: none;
+  box-shadow: none;
+}
+.btn-lg {
+  min-height: 3.5rem;
+  font-size: 1.15rem;
+}
+
+.record-btn {
+  font-size: clamp(1.3rem, 5vw, 1.6rem);
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  min-height: 5rem;
+  border-radius: var(--radius-lg);
+  box-shadow: 0 4px 14px rgba(218, 54, 51, 0.35);
+}
+.record-btn:disabled {
+  box-shadow: none;
+}
+
+.seg {
+  display: flex;
+  gap: var(--space-2);
+}
+.seg button {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 2.75rem;
+  padding: 0.5rem 0.25rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+}
+.seg button.active {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+/* ---------- Status dot ---------- */
+
 .status-dot {
   display: inline-block;
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: #f85149;
+  background: var(--color-dot-off);
+  flex-shrink: 0;
 }
 .status-dot.on {
-  background: #3fb950;
+  background: var(--color-dot-on);
 }
-.record-btn {
-  font-size: 1.6rem;
-  padding: 28px;
-  border-radius: 16px;
-}
-.seg {
-  display: flex;
-  gap: 6px;
-}
-.seg button {
-  padding: 10px 0;
-  font-size: 0.95rem;
-  background: #21262d;
-}
-.seg button.active {
-  background: #238636;
-}
-.clip-card video {
-  margin-bottom: 8px;
-}
-a.dl {
-  color: #58a6ff;
-  margin-right: 12px;
-  text-decoration: none;
-}
+
+/* ---------- Disclosure (details/summary) ---------- */
+
 summary {
   cursor: pointer;
   font-weight: 600;
+  list-style: none;
 }
+summary::-webkit-details-marker {
+  display: none;
+}
+summary::after {
+  content: "▾";
+  float: right;
+  color: var(--color-text-muted);
+  transition: transform 0.15s ease;
+}
+details[open] summary::after {
+  transform: rotate(180deg);
+}
+summary + * {
+  margin-top: var(--space-3);
+}
+
+/* ---------- Camera page ---------- */
+
+.video-stage {
+  position: relative;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: #000;
+  aspect-ratio: 16 / 9;
+}
+.video-stage video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000;
+}
+.orient-hint {
+  position: absolute;
+  z-index: 2;
+  top: var(--space-2);
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(13, 17, 23, 0.75);
+  backdrop-filter: blur(4px);
+  padding: 0.4rem 0.85rem;
+  border-radius: var(--radius-pill);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+.fs-toggle {
+  position: absolute;
+  z-index: 2;
+  right: var(--space-2);
+  bottom: var(--space-2);
+  width: auto;
+  min-height: 2.75rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.85rem;
+  border-radius: var(--radius-pill);
+  background: rgba(13, 17, 23, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--color-text);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.fs-toggle:hover:not(:disabled) {
+  filter: brightness(1.2);
+}
+
+#live:fullscreen,
+#live:-webkit-full-screen {
+  width: 100vw;
+  height: 100vh;
+  max-width: none;
+  border-radius: 0;
+  border: 0;
+  justify-content: center;
+  background: #000;
+}
+#live:fullscreen .video-stage,
+#live:-webkit-full-screen .video-stage {
+  flex: 1;
+  min-height: 0;
+  aspect-ratio: auto;
+  border-radius: 0;
+}
+#live:fullscreen select,
+#live:-webkit-full-screen select {
+  display: none;
+}
+
+.status-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* ---------- Control page ---------- */
+
+.control-grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.cam-list,
+.jobs-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.cam-list li,
+.jobs-list li {
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface-2);
+  border-radius: var(--radius-sm);
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+.qr-code {
+  display: block;
+  width: 100%;
+  max-width: 240px;
+  margin-inline: auto;
+  background: #fff;
+  border-radius: var(--radius-sm);
+  padding: var(--space-2);
+}
+
 .log-controls {
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
   align-items: center;
-  margin: 10px 0 8px;
 }
 .log-controls select {
   flex: 1;
   width: auto;
-  padding: 8px;
+  min-height: 2.25rem;
+  padding: 0.4rem 0.6rem;
 }
 .log-controls button {
   flex: 0 0 auto;
   width: auto;
-  padding: 8px 16px;
+  min-height: 2.25rem;
+  padding: 0.5rem 1rem;
   font-size: 0.9rem;
 }
 .log-view {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: 0.78rem;
   line-height: 1.5;
   max-height: 240px;
   overflow-y: auto;
-  background: #0d1117;
-  border: 1px solid #30363d;
-  border-radius: 8px;
-  padding: 8px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2);
   white-space: pre-wrap;
   word-break: break-word;
 }
 .log-line.debug {
-  color: #8b949e;
+  color: var(--color-text-muted);
 }
 .log-line.info {
-  color: #e6edf3;
+  color: var(--color-text);
 }
 .log-line.warn {
   color: #d29922;
 }
 .log-line.error {
   color: #ff7b72;
+}
+
+/* ---------- Clips gallery ---------- */
+
+.clip-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
+  gap: var(--space-4);
+  align-items: start;
+}
+.clip-card-header {
+  font-size: 0.95rem;
+}
+.clip-media {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.clip-downloads {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+a.dl {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.4rem 0.7rem;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  color: var(--color-info);
+  text-decoration: none;
+  font-size: 0.85rem;
+}
+a.dl:hover {
+  background: var(--color-surface-3);
+  border-color: var(--color-border-strong);
+}
+.clip-footer {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.clip-footer .share-btn {
+  width: auto;
+  flex: 1;
+}
+.qr-code-sm {
+  width: 64px;
+  height: 64px;
+  flex-shrink: 0;
+  background: #fff;
+  border-radius: var(--radius-sm);
+  padding: 0.25rem;
+}
+
+/* ---------- Breakpoints (mobile-first) ---------- */
+
+@media (min-width: 640px) {
+  body {
+    padding: var(--space-6) var(--space-5);
+  }
+}
+
+@media (min-width: 900px) {
+  .page {
+    gap: var(--space-5);
+  }
+  .page--wide {
+    max-width: 55rem;
+  }
+  .control-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 380px) minmax(0, 1fr);
+    /* No `align-items: start` here (unlike `.clip-grid`): `.card-jobs` spans both rows and should
+     * stretch to fill that full height so its card surface reaches down to `.card-logs`'s top,
+     * rather than leaving a gap of bare page background when the job list is short/empty. */
+  }
+  .card-record {
+    grid-column: 1;
+  }
+  .card-duration {
+    grid-column: 1;
+  }
+  .card-qr {
+    grid-column: 1;
+  }
+  .card-jobs {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+  }
+  .card-logs {
+    grid-column: 2;
+  }
+}
+
+@media (min-width: 1200px) {
+  .page--wide {
+    max-width: 68rem;
+  }
 }

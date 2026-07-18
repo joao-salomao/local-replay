@@ -314,6 +314,48 @@ document.addEventListener("visibilitychange", () => {
   }
 });
 
+/**
+ * Fullscreen toggle for the live camera view (`#live`) — lets the operator make full use of a
+ * phone mounted on a tripod: a bigger preview with minimal chrome. Wired once at module load,
+ * independent of camera/stream state (it only touches the Fullscreen API and DOM, never `stream`
+ * or `recorder`). Feature-detected against both the standard and older WebKit-prefixed APIs (iOS
+ * Safari historically didn't expose `requestFullscreen` on arbitrary elements) — the button is
+ * hidden entirely when neither exists, and every request/exit call is wrapped in try/catch so a
+ * runtime rejection (e.g. a permissions-policy block) degrades to a silent no-op rather than an
+ * unhandled rejection.
+ */
+type FullscreenTarget = HTMLElement & { webkitRequestFullscreen?: () => Promise<void> };
+type FullscreenDoc = Document & {
+  webkitExitFullscreen?: () => Promise<void>;
+  webkitFullscreenElement?: Element | null;
+};
+
+const isFullscreenActive = (): boolean =>
+  !!(document.fullscreenElement ?? (document as FullscreenDoc).webkitFullscreenElement);
+
+const fsTarget = $<FullscreenTarget>("live");
+const fsToggle = $("fullscreen-toggle");
+if (!fsTarget.requestFullscreen && !fsTarget.webkitRequestFullscreen) {
+  fsToggle.hidden = true; // Fullscreen API unavailable: no dead control shown
+} else {
+  const updateFsLabel = () => {
+    fsToggle.textContent = isFullscreenActive() ? "✕ Sair da tela cheia" : "⛶ Tela cheia";
+  };
+  fsToggle.onclick = async () => {
+    try {
+      if (isFullscreenActive()) {
+        await (document.exitFullscreen?.() ?? (document as FullscreenDoc).webkitExitFullscreen?.());
+      } else {
+        await (fsTarget.requestFullscreen?.() ?? fsTarget.webkitRequestFullscreen?.());
+      }
+    } catch {
+      /* Fullscreen API unavailable/denied at runtime: no-op */
+    }
+  };
+  document.addEventListener("fullscreenchange", updateFsLabel);
+  document.addEventListener("webkitfullscreenchange", updateFsLabel);
+}
+
 $("start").onclick = async () => {
   const name = $<HTMLInputElement>("angle-name").value.trim();
   if (!name) {

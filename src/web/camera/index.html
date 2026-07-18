@@ -7,22 +7,29 @@
   <link rel="stylesheet" href="/assets/app.css" />
 </head>
 <body>
-  <h1>📷 Câmera</h1>
-  <div class="banner" id="hidden-banner" hidden>⚠️ A tela ficou oculta — buffer reiniciado. Mantenha esta página aberta e o celular na tomada.</div>
-  <div class="card" id="setup">
-    <input id="angle-name" placeholder="Nome do ângulo (ex: Fundo)" />
-    <div style="height:8px"></div>
-    <button type="button" id="start">Iniciar câmera</button>
-    <div class="error" id="camera-error"></div>
-  </div>
-  <div class="card" id="live" hidden>
-    <video id="preview" autoplay muted playsinline></video>
-    <p class="muted" id="orient-hint" hidden>↔️ Vire o celular para a horizontal</p>
-    <select id="camera-select" hidden></select>
-    <p class="row"><span class="status-dot" id="conn-dot"></span><span id="conn-text">Desconectado</span></p>
-    <p class="muted" id="media-info"></p>
-    <p id="buffer-status" class="muted"></p>
-    <p class="error" id="upload-error"></p>
+  <div class="page">
+    <h1>📷 Câmera</h1>
+    <div class="banner" id="hidden-banner" hidden>⚠️ A tela ficou oculta — buffer reiniciado. Mantenha esta página aberta e o celular na tomada.</div>
+    <div class="card" id="setup">
+      <label class="field-label" for="angle-name">Nome do ângulo</label>
+      <input id="angle-name" placeholder="Nome do ângulo (ex: Fundo)" />
+      <button type="button" id="start" class="btn-lg">Iniciar câmera</button>
+      <div class="error" id="camera-error"></div>
+    </div>
+    <div class="card" id="live" hidden>
+      <div class="video-stage">
+        <video id="preview" autoplay muted playsinline></video>
+        <p class="muted orient-hint" id="orient-hint" hidden>↔️ Vire o celular para a horizontal</p>
+        <button type="button" id="fullscreen-toggle" class="fs-toggle">⛶ Tela cheia</button>
+      </div>
+      <select id="camera-select" hidden></select>
+      <div class="status-panel">
+        <p class="row"><span class="status-dot" id="conn-dot"></span><span id="conn-text">Desconectado</span></p>
+        <p class="muted" id="media-info"></p>
+        <p id="buffer-status" class="muted"></p>
+        <p class="error" id="upload-error"></p>
+      </div>
+    </div>
   </div>
   <script type="module" src="/assets/camera.js"></script>
 </body>

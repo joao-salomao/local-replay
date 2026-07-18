@@ -53,7 +53,7 @@ function render(): void {
     .join("");
   $("durations").innerHTML = DURATIONS.map(
     (d) =>
-      `<button data-d="${d}" class="${d === state.clipDurationSeconds ? "active" : ""}" style="flex:1">${d}s</button>`,
+      `<button type="button" data-d="${d}" class="${d === state.clipDurationSeconds ? "active" : ""}">${d}s</button>`,
   ).join("");
   $("durations")
     .querySelectorAll("button")

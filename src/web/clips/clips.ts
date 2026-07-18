@@ -57,12 +57,16 @@ function card(clip: ClipEntry): string {
     ? `<p class="muted">Lado a lado (simultâneo)</p><video controls preload="metadata" src="${sideBySide}"></video>`
     : "";
   return `<div class="card clip-card">
-    <p><strong>Lance #${clip.clipNumber}</strong> — ${time(clip.createdAt)}${partial}</p>
-    <video controls preload="metadata" src="${video}"></video>
-    ${sideBySidePlayer}
-    <p>${downloads}</p>
-    <button class="share-btn" data-file="${video}" data-name="lance-${String(clip.clipNumber).padStart(3, "0")}.mp4">📤 Compartilhar</button>
-    <img alt="QR" style="width:96px;background:#fff;border-radius:6px;margin-top:8px" src="/api/qr.svg?data=${encodeURIComponent(location.origin + video)}" />
+    <p class="clip-card-header"><strong>Lance #${clip.clipNumber}</strong> — ${time(clip.createdAt)}${partial}</p>
+    <div class="clip-media">
+      <video controls preload="metadata" src="${video}"></video>
+      ${sideBySidePlayer}
+    </div>
+    <p class="clip-downloads">${downloads}</p>
+    <div class="clip-footer">
+      <button type="button" class="share-btn" data-file="${video}" data-name="lance-${String(clip.clipNumber).padStart(3, "0")}.mp4">📤 Compartilhar</button>
+      <img class="qr-code-sm" alt="QR" src="/api/qr.svg?data=${encodeURIComponent(location.origin + video)}" />
+    </div>
   </div>`;
 }
 
