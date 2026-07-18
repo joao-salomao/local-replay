@@ -6,6 +6,7 @@
     "dev": "bun run src/server/index.ts",
     "start": "bun run src/server/index.ts",
     "test": "LOG_LEVEL=silent bun test tests/unit tests/integration",
+    "test:coverage": "LOG_LEVEL=silent bun test tests/unit tests/integration --coverage",
     "test:e2e": "playwright test",
     "format": "biome format --write .",
     "format:check": "biome format ."
