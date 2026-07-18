@@ -319,10 +319,12 @@ document.addEventListener("visibilitychange", () => {
  * phone mounted on a tripod: a bigger preview with minimal chrome. Wired once at module load,
  * independent of camera/stream state (it only touches the Fullscreen API and DOM, never `stream`
  * or `recorder`). Feature-detected against both the standard and older WebKit-prefixed APIs (iOS
- * Safari historically didn't expose `requestFullscreen` on arbitrary elements) — the button is
- * hidden entirely when neither exists, and every request/exit call is wrapped in try/catch so a
- * runtime rejection (e.g. a permissions-policy block) degrades to a silent no-op rather than an
- * unhandled rejection.
+ * Safari on the iPhone exposes NO element Fullscreen API at all, only `<video>.webkitEnterFullscreen`),
+ * so on iPhone it falls back to fullscreening the preview `<video>`; the button is hidden only when
+ * even that is unavailable. Every request/exit call is wrapped in try/catch so a runtime rejection
+ * (e.g. a permissions-policy block, or the video not yet playing) degrades to a silent no-op.
+ * Note: the most chromeless iPhone experience is "Add to Home Screen" (standalone mode, enabled by
+ * the `apple-mobile-web-app-capable` meta on this page), since iOS has no true element fullscreen.
  */
 type FullscreenTarget = HTMLElement & { webkitRequestFullscreen?: () => Promise<void> };
 type FullscreenDoc = Document & {
@@ -333,27 +335,59 @@ type FullscreenDoc = Document & {
 const isFullscreenActive = (): boolean =>
   !!(document.fullscreenElement ?? (document as FullscreenDoc).webkitFullscreenElement);
 
+// iOS Safari on the iPHONE has no element Fullscreen API at all — `requestFullscreen`
+// simply doesn't exist on any element. The one thing iOS lets go fullscreen is a `<video>`,
+// via the WebKit-only `video.webkitEnterFullscreen()` (the native iOS video player). So on
+// iPhone we fall back to fullscreening the live preview video itself. (iPadOS and Android/desktop
+// use the standard element Fullscreen API on the whole `#live` card, which is nicer.)
+type IosVideo = HTMLVideoElement & {
+  webkitEnterFullscreen?: () => void;
+  webkitDisplayingFullscreen?: boolean;
+};
+
 const fsTarget = $<FullscreenTarget>("live");
 const fsToggle = $("fullscreen-toggle");
-if (!fsTarget.requestFullscreen && !fsTarget.webkitRequestFullscreen) {
-  fsToggle.hidden = true; // Fullscreen API unavailable: no dead control shown
+const fsVideo = $<IosVideo>("preview");
+const canElementFs = !!(fsTarget.requestFullscreen || fsTarget.webkitRequestFullscreen);
+const canVideoFs = !canElementFs && typeof fsVideo.webkitEnterFullscreen === "function";
+
+if (!canElementFs && !canVideoFs) {
+  fsToggle.hidden = true; // Fullscreen genuinely unavailable: no dead control shown
 } else {
   const updateFsLabel = () => {
-    fsToggle.textContent = isFullscreenActive() ? "✕ Sair da tela cheia" : "⛶ Tela cheia";
+    const active = isFullscreenActive() || !!fsVideo.webkitDisplayingFullscreen;
+    fsToggle.textContent = active ? "✕ Sair da tela cheia" : "⛶ Tela cheia";
   };
   fsToggle.onclick = async () => {
     try {
-      if (isFullscreenActive()) {
-        await (document.exitFullscreen?.() ?? (document as FullscreenDoc).webkitExitFullscreen?.());
+      if (canElementFs) {
+        if (isFullscreenActive()) {
+          await (document.exitFullscreen?.() ??
+            (document as FullscreenDoc).webkitExitFullscreen?.());
+        } else {
+          await (fsTarget.requestFullscreen?.() ?? fsTarget.webkitRequestFullscreen?.());
+        }
       } else {
-        await (fsTarget.requestFullscreen?.() ?? fsTarget.webkitRequestFullscreen?.());
+        // iPhone: only the video element can go fullscreen; exit is via the native player's
+        // "Done" button (no reliable programmatic exit), so this only ever enters.
+        fsVideo.webkitEnterFullscreen?.();
       }
     } catch {
-      /* Fullscreen API unavailable/denied at runtime: no-op */
+      /* Fullscreen unavailable/denied at runtime (e.g. video not yet playing): no-op */
     }
   };
   document.addEventListener("fullscreenchange", updateFsLabel);
   document.addEventListener("webkitfullscreenchange", updateFsLabel);
+  // iOS video fullscreen fires its own begin/end events on the <video>, not on document.
+  fsVideo.addEventListener("webkitbeginfullscreen", updateFsLabel);
+  fsVideo.addEventListener("webkitendfullscreen", updateFsLabel);
+
+  // On iPhone (video-fs path) and not already launched from the home screen, point the operator
+  // at the reliable chromeless option — video fullscreen may not cover a live getUserMedia stream
+  // on every iOS version, whereas standalone mode always removes the Safari chrome.
+  if (canVideoFs && !(navigator as Navigator & { standalone?: boolean }).standalone) {
+    $("fs-hint").hidden = false;
+  }
 }
 
 $("start").onclick = async () => {

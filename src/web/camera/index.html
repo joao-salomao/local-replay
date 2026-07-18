@@ -2,7 +2,13 @@
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <!-- "Add to Home Screen" runs the camera page standalone (no Safari chrome) — the closest thing
+       to fullscreen the iPhone offers, since iOS has no element Fullscreen API. -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Local Replay" />
   <title>Câmera — Local Replay</title>
   <link rel="stylesheet" href="/assets/app.css" />
 </head>
@@ -22,6 +28,10 @@
         <p class="muted orient-hint" id="orient-hint" hidden>↔️ Vire o celular para a horizontal</p>
         <button type="button" id="fullscreen-toggle" class="fs-toggle">⛶ Tela cheia</button>
       </div>
+      <p class="muted" id="fs-hint" hidden>
+        📱 No iPhone, para tela cheia sem a barra do Safari: <strong>Compartilhar → Adicionar à Tela
+        de Início</strong> e abra o app pelo ícone.
+      </p>
       <select id="camera-select" hidden></select>
       <div class="status-panel">
         <p class="row"><span class="status-dot" id="conn-dot"></span><span id="conn-text">Desconectado</span></p>
