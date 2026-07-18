@@ -1,4 +1,5 @@
 import { api, isLoggedIn } from "./shared/api";
+import { $ } from "./shared/dom-helpers";
 
 /**
  * Login page: password form that swaps to a role picker (camera/control/clips links) on success,
@@ -6,7 +7,6 @@ import { api, isLoggedIn } from "./shared/api";
  * already present.
  */
 
-const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const showRoles = () => {
   $("login-card").hidden = true;
   $("roles").hidden = false;

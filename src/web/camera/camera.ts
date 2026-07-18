@@ -1,5 +1,6 @@
 import { cycleSeconds, selectFilesForWindow } from "@shared/buffer-window";
 import type { ServerMessage } from "@shared/protocol";
+import { $ } from "@web/shared/dom-helpers";
 import { WsClient } from "@web/shared/ws-client";
 
 /**
@@ -36,7 +37,6 @@ import { WsClient } from "@web/shared/ws-client";
 
 type BufferedFile = { blob: Blob; mimeType: string; startMs: number; durationMs: number };
 
-const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const MIME_CANDIDATES = [
   "video/mp4;codecs=avc1",
   "video/webm;codecs=h264,opus",

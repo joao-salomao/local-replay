@@ -1,5 +1,6 @@
 import type { CameraInfo, JobStatus, LogEntry, ServerMessage } from "@shared/protocol";
 import { api } from "@web/shared/api";
+import { $ } from "@web/shared/dom-helpers";
 import { esc } from "@web/shared/esc";
 import { WsClient } from "@web/shared/ws-client";
 
@@ -16,7 +17,6 @@ type State = {
   freeDiskGB?: number | null;
 };
 const DURATIONS = [10, 20, 30, 45, 60];
-const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
 /** Maps a job's lifecycle state (see `protocol.ts#JobState`) to its pt-BR display label. */
 function jobLabel(job: JobStatus): string {

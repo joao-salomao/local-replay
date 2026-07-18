@@ -1,4 +1,5 @@
 import { api } from "@web/shared/api";
+import { $ } from "@web/shared/dom-helpers";
 import { esc } from "@web/shared/esc";
 
 /**
@@ -20,7 +21,6 @@ type ClipEntry = {
   dir: string;
 };
 
-const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const time = (ms: number) =>
   new Date(ms).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 
