@@ -142,14 +142,16 @@ cuida do TLS com um certificado de verdade.
 
 | Variável | Padrão | Descrição |
 |---|---|---|
-| `BEHIND_PROXY` | *(vazio)* | Qualquer valor **não vazio** ativa o modo proxy (ex.: `BEHIND_PROXY=1`) — inclusive `"false"` ou `"0"`, então para desligar é só não definir a variável. Nesse modo desliga a geração do certificado autoassinado e o redirect HTTP→HTTPS; o servidor passa a escutar HTTP puro em `PORT`. |
+| `BEHIND_PROXY` | *(vazio)* | Ativa o modo proxy quando definida como `1`, `true` ou `yes` (case-insensitive; ex.: `BEHIND_PROXY=1`) — qualquer outro valor, incluindo vazio, `false` ou `0`, mantém o modo LAN padrão. Nesse modo desliga a geração do certificado autoassinado e o redirect HTTP→HTTPS; o servidor passa a escutar HTTP puro em `PORT`. |
 | `PUBLIC_URL` | *(vazio)* | Endereço público servido pelo proxy (ex.: `https://replay.exemplo.com`), usado na mensagem de boot e no QR code do terminal. **Se não for definida, o servidor sobe mesmo assim, mas avisa no terminal** que o QR/link vai apontar para `localhost` e não vai funcionar nos aparelhos dos jogadores. |
 | `PORT` | `8080` | Porta HTTP pura em que o app escuta, para o proxy encaminhar as requisições. |
 
 Com `BEHIND_PROXY` ativo, o IP usado para limitar tentativas de login (rate limit) passa a vir do
-cabeçalho `X-Forwarded-For` (primeiro IP da lista) em vez do IP do socket — nesse modo o socket é
-sempre o do proxy, não o do cliente. Qualquer proxy reverso comum já define esse cabeçalho com o IP
-real do cliente por padrão.
+cabeçalho `X-Forwarded-For` — a **última** entrada da lista, não a primeira, pois é essa que reflete
+o peer observado diretamente pelo proxy da borda; entradas anteriores vêm do próprio cliente e podem
+ser forjadas — em vez do IP do socket (nesse modo o socket é sempre o do proxy, não o do cliente).
+Qualquer proxy reverso comum já define esse cabeçalho com o IP real do cliente por padrão (veja a
+Nota de segurança abaixo para o cuidado necessário com a porta `PORT`).
 
 ### Exemplo com Caddy
 
@@ -199,6 +201,11 @@ Recomendações mínimas antes de expor publicamente:
   `data/config.json` antes de subir, ou pare o container, edite e suba de novo).
 - Sirva **só** HTTPS — é isso que o proxy da seção acima já garante; não exponha a porta `PORT`
   (HTTP puro) diretamente para a internet, apenas o proxy deve ser público.
+- O rate limit de login confia na **última** entrada do `X-Forwarded-For` (o peer observado
+  diretamente pelo proxy da borda) — seguro com Caddy (descarta o XFF recebido do cliente), nginx
+  (`proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;`, que só anexa) e Cloudflare
+  (idem, append-only). Isso só é seguro se a porta `PORT` não estiver exposta direto à internet
+  (bullet acima) — do contrário um cliente pode falar direto com o app e forjar o XFF livremente.
 - Para um evento privado, considere também restringir por IP na frente, no proxy — por exemplo, no
   Caddy, com um matcher `remote_ip` bloqueando quem não estiver na lista esperada — em vez de
   depender só da senha.

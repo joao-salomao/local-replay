@@ -15,7 +15,7 @@ import type { ServerMessage } from "../shared/protocol";
 const dataDir = process.env.DATA_DIR ?? "data";
 const httpsPort = Number(process.env.HTTPS_PORT ?? 8443);
 const httpPort = Number(process.env.HTTP_PORT ?? 8080);
-const behindProxy = !!process.env.BEHIND_PROXY;
+const behindProxy = /^(1|true|yes)$/i.test(process.env.BEHIND_PROXY ?? "");
 const publicUrl = process.env.PUBLIC_URL;
 const port = Number(process.env.PORT ?? 8080);
 

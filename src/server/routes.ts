@@ -100,8 +100,9 @@ export function createApp(ctx: AppContext) {
 
     "/api/login": {
       POST: async (req: Request, server: Server<WSData>) => {
+        // last hop = the fronting proxy's observed peer IP; earlier entries are client-forgeable
         const ip = ctx.trustProxy
-          ? req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown"
+          ? req.headers.get("x-forwarded-for")?.split(",").pop()?.trim() || "unknown"
           : (server.requestIP(req)?.address ?? "unknown");
 
         if (!ctx.loginLimiter.allow(ip, Date.now()))

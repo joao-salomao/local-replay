@@ -168,4 +168,36 @@ describe("routes", () => {
       proxyApp.stop();
     }
   });
+
+  it("ignores X-Forwarded-For and rate limits by socket when not behind a proxy", async () => {
+    // mirrors the proxy test above but with the default trustProxy=false: a spoofed XFF must be
+    // IGNORED and the limiter must key off the shared socket instead
+    const dataDir = mkdtempSync(join(tmpdir(), "replay-routes-noproxy-"));
+    writeFileSync(join(dataDir, "config.json"), JSON.stringify({ password: "senha-teste" }));
+    const noProxyApp = await createAppForTest(
+      dataDir,
+      {},
+      { trustProxy: false, loginLimiter: new RateLimiter(5, 60_000) },
+    );
+    try {
+      const attempt = (forwardedFor: string) =>
+        fetch(`${noProxyApp.base}/api/login`, {
+          method: "POST",
+          headers: { "x-forwarded-for": forwardedFor },
+          body: JSON.stringify({ password: "nope" }),
+        });
+
+      // 5 wrong-password attempts, each carrying a DIFFERENT spoofed X-Forwarded-For, all over
+      // the same loopback socket, are each let through the limiter
+      const forgedIps = ["1.1.1.1", "2.2.2.2", "3.3.3.3", "4.4.4.4", "5.5.5.5"];
+      for (const forged of forgedIps) {
+        expect((await attempt(forged)).status).toBe(401);
+      }
+      // the 6th attempt, with yet another distinct forged IP, is still rate limited — proving
+      // the different forged XFF values did NOT create fresh buckets (socket-keyed, XFF ignored)
+      expect((await attempt("6.6.6.6")).status).toBe(429);
+    } finally {
+      noProxyApp.stop();
+    }
+  });
 });
