@@ -30,8 +30,19 @@ const log = logger("hub");
 type CameraConn = { info: CameraInfo; lastSeen: number };
 
 export class Hub {
-  private camerasById = new Map<string, CameraConn>();
-  private stateChangedListener: () => void = () => {};
+  private camerasById: Map<string, CameraConn>;
+  private stateChangedListener: () => void;
+
+  // Explicit constructor (rather than class-field initializers) is deliberate: Bun 1.3.1's
+  // function-coverage counter always reserves one "found" function slot for a class's
+  // constructor, but only ever marks it "hit" if the constructor is user-written — a class with
+  // only field initializers and no explicit constructor is structurally stuck below 100% function
+  // coverage no matter how thoroughly it's tested (verified with a throwaway repro). Giving Hub a
+  // real constructor body fixes that for real, since every test already goes through `new Hub()`.
+  constructor() {
+    this.camerasById = new Map();
+    this.stateChangedListener = () => {};
+  }
 
   /** Register the callback invoked whenever the camera registry changes (register, status update, offline sweep, or disconnect). Replaces the previous public `onStateChanged` property. */
   setOnStateChanged(listener: () => void): void {

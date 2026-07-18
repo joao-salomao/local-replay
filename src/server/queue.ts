@@ -4,7 +4,18 @@
  * this bounds it to one job at a time on what's typically a modest local machine).
  */
 export class SerialQueue {
-  private chain: Promise<void> = Promise.resolve();
+  private chain: Promise<void>;
+
+  // Explicit constructor (rather than a class-field initializer) is deliberate: Bun 1.3.1's
+  // function-coverage counter always reserves one "found" function slot for a class's
+  // constructor, but only ever marks it "hit" if the constructor is user-written — a class with
+  // only a field initializer and no explicit constructor is structurally stuck below 100%
+  // function coverage no matter how thoroughly it's tested (verified with a throwaway repro).
+  // Giving SerialQueue a real constructor body fixes that for real, since every test already goes
+  // through `new SerialQueue()`.
+  constructor() {
+    this.chain = Promise.resolve();
+  }
 
   /**
    * Queues `task` to run after everything already queued. Two subtleties make this correct:

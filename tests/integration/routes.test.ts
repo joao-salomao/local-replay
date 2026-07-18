@@ -43,6 +43,28 @@ describe("routes", () => {
     expect((await fetch(`${base}/assets/camera.js`)).status).toBe(200);
   });
 
+  it("serves the control and clips pages once authed (otherwise the e2e-only Playwright specs are the only thing that ever fetches them)", async () => {
+    const guardedControl = await fetch(`${base}/control`, { redirect: "manual" });
+    expect(guardedControl.status).toBe(302);
+    const guardedClips = await fetch(`${base}/clips`, { redirect: "manual" });
+    expect(guardedClips.status).toBe(302);
+    const cookie = await login();
+    expect((await fetch(`${base}/control`, { headers: { cookie } })).status).toBe(200);
+    expect((await fetch(`${base}/clips`, { headers: { cookie } })).status).toBe(200);
+  });
+
+  it("tolerates a non-JSON login body (falls back to an empty body, fails auth rather than 500ing)", async () => {
+    // req.json() rejects on a non-JSON body; the route's `.catch(() => ({}))` fallback is what's
+    // under test here — a distinct code path from the "wrong password" 401 below, which sends a
+    // perfectly valid JSON body with the wrong value.
+    const res = await fetch(`${base}/api/login`, {
+      method: "POST",
+      body: "not json at all",
+    });
+    expect(res.status).toBe(401);
+    expect((await res.json()).error).toBeTruthy();
+  });
+
   it("rejects wrong passwords and rate limits logins", async () => {
     expect(
       (
@@ -65,6 +87,16 @@ describe("routes", () => {
       body: JSON.stringify({ seconds: 25 }),
     });
     expect(bad.status).toBe(400);
+    // Non-JSON body: req.json() rejects and the route's `.catch(() => ({}))` fallback kicks in,
+    // leaving `seconds` undefined — a distinct path from the "valid JSON, invalid value" case
+    // just above.
+    const nonJson = await fetch(`${base}/api/config/clip-duration`, {
+      method: "POST",
+      headers: { cookie },
+      body: "not json at all",
+    });
+    expect(nonJson.status).toBe(400);
+    expect((await nonJson.json()).error).toBe("invalid seconds");
     const ok = await fetch(`${base}/api/config/clip-duration`, {
       method: "POST",
       headers: { cookie },
@@ -91,6 +123,16 @@ describe("routes", () => {
     expect((await fetch(`${base}/api/clips`)).status).toBe(401);
     expect((await fetch(`${base}/api/logs`)).status).toBe(401);
     expect((await fetch(`${base}/ws`)).status).toBe(401);
+  });
+
+  it("returns 400 when an authed /ws request isn't an actual WebSocket upgrade", async () => {
+    // A plain fetch() carries none of the Sec-WebSocket-* handshake headers, so server.upgrade()
+    // itself fails (returns false) even though auth passes — a distinct failure mode from the
+    // 401-without-a-cookie case above.
+    const cookie = await login();
+    const res = await fetch(`${base}/ws`, { headers: { cookie } });
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBeTruthy();
   });
 
   it("returns the buffered log backlog", async () => {
@@ -172,6 +214,47 @@ describe("routes", () => {
     expect(res.status).toBe(400);
     expect((await res.json()).error).toBeTruthy();
 
+    // filesMeta isn't valid JSON at all: hits the JSON.parse catch (a different 400 than the
+    // "every" field-shape check exercised just above, which only runs once parsing succeeds).
+    const badJsonForm = new FormData();
+    badJsonForm.append("cameraId", "cam-x");
+    badJsonForm.append("angleName", "Fundo");
+    badJsonForm.append("filesMeta", "{not valid json");
+    badJsonForm.append("file0", new Blob(["x"]), "part0");
+    const badJsonRes = await fetch(`${base}/api/clips/${trig.jobId}/upload`, {
+      method: "POST",
+      headers: { cookie },
+      body: badJsonForm,
+    });
+    expect(badJsonRes.status).toBe(400);
+    expect((await badJsonRes.json()).error).toBe("bad filesMeta");
+
+    // filesMeta parses fine but is an empty array: hits the "missing fields" check specifically
+    // (distinct from both the parse catch above and the "every" shape check, which only runs on
+    // a non-empty array).
+    const emptyForm = new FormData();
+    emptyForm.append("cameraId", "cam-x");
+    emptyForm.append("angleName", "Fundo");
+    emptyForm.append("filesMeta", JSON.stringify([]));
+    const emptyRes = await fetch(`${base}/api/clips/${trig.jobId}/upload`, {
+      method: "POST",
+      headers: { cookie },
+      body: emptyForm,
+    });
+    expect(emptyRes.status).toBe(400);
+    expect((await emptyRes.json()).error).toBe("missing fields");
+
+    // A body that isn't multipart/form-data at all makes req.formData() itself reject, hitting
+    // the route's `.catch(() => null)` fallback — a distinct 400 from every filesMeta-shaped
+    // check above, which all assume formData() already parsed successfully.
+    const malformedFormRes = await fetch(`${base}/api/clips/${trig.jobId}/upload`, {
+      method: "POST",
+      headers: { cookie, "content-type": "text/plain" },
+      body: "not a multipart form body",
+    });
+    expect(malformedFormRes.status).toBe(400);
+    expect((await malformedFormRes.json()).error).toBe("malformed form");
+
     app.ctx.hub.close(fakeWs); // return the shared hub to zero cameras for other tests
   });
 
@@ -238,5 +321,39 @@ describe("routes", () => {
     } finally {
       noProxyApp.stop();
     }
+  });
+
+  it("falls back to a 404 for a route matching nothing in the route table", async () => {
+    const res = await fetch(`${base}/this-route-does-not-exist-anywhere`);
+    expect(res.status).toBe(404);
+    expect((await res.json()).error).toBeTruthy();
+  });
+
+  it("closing a real websocket connection is observed server-side (the camera drops out of the registry)", async () => {
+    // Unlike hub.test.ts's fake ws (which calls Hub.close() directly), this goes through a real
+    // WebSocket + the actual Bun.serve `websocket.close` adapter in routes.ts, proving that wiring
+    // fires for real: the only thing that removes a camera from the registry is Hub.close(), so
+    // observing the removal proves the server-side close handler actually ran.
+    const cookie = await login();
+    const ws = new WebSocket(app.ws, { headers: { cookie } } as unknown as string[]);
+    const cameraId = await new Promise<string>((resolve, reject) => {
+      ws.onopen = () => {
+        ws.send(JSON.stringify({ type: "register", role: "camera", name: "WsCloseTest" }));
+      };
+      ws.onmessage = (ev) => {
+        const msg = JSON.parse(String(ev.data));
+        if (msg.type === "registered") resolve(msg.cameraId);
+      };
+      ws.onerror = () => reject(new Error("ws error"));
+    });
+    expect(app.ctx.hub.cameras().some((c) => c.id === cameraId)).toBe(true);
+
+    ws.close();
+    const deadline = Date.now() + 5000;
+    while (app.ctx.hub.cameras().some((c) => c.id === cameraId)) {
+      if (Date.now() > deadline) throw new Error("camera was not removed after ws close");
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    expect(app.ctx.hub.cameras().some((c) => c.id === cameraId)).toBe(false);
   });
 });

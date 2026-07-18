@@ -30,6 +30,12 @@ export async function buildPages(webDir: string, outDir: string): Promise<PageAs
     target: "browser",
     naming: "[name].[ext]",
     minify: false,
+    // Bun.build defaults to `throw: true`, which rejects with its own raw AggregateError on any
+    // bundling failure — bypassing the `result.success` check below entirely (it would never see
+    // a `false` value; the throw already happened). `throw: false` makes failures come back as
+    // data instead, so the check below is live and can wrap them in one readable message
+    // aggregating every entrypoint's errors, rather than surfacing Bun's own less-readable one.
+    throw: false,
   });
   if (!result.success) {
     throw new Error(`page bundling failed: ${result.logs.map(String).join("\n")}`);

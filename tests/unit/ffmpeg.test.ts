@@ -6,6 +6,7 @@ import {
   combineSequentialArgs,
   combineSideBySideArgs,
   normalizeCutArgs,
+  runFfmpeg,
   writeConcatList,
 } from "@server/ffmpeg";
 
@@ -75,6 +76,16 @@ describe("normalizeCutArgs", () => {
     const args = normalizeCutArgs({ ...base, hasAudio: false }).join(" ");
     expect(args).toContain("anullsrc=r=48000:cl=stereo");
     expect(args).toContain("-map 1:a:0");
+  });
+});
+
+describe("runFfmpeg", () => {
+  it("throws with the exit code and stderr tail when ffmpeg exits non-zero (real ffmpeg, real failure)", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "replay-ffmpeg-fail-"));
+    const missingInput = join(dir, "does-not-exist.mp4");
+    await expect(
+      runFfmpeg(["-hide_banner", "-y", "-i", missingInput, join(dir, "out.mp4")]),
+    ).rejects.toThrow(/ffmpeg exited/);
   });
 });
 

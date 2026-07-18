@@ -1,0 +1,14 @@
+[test]
+# `coverageSkipTestFiles` keeps the *.test.ts entry files themselves out of the coverage table (we
+# only care about coverage of the code under test, not the test files); `coverageThreshold` makes
+# `bun test --coverage` (see package.json's `test:coverage` script) FAIL — nonzero exit — the
+# moment either function or line coverage drops below 100% for any measured file. This is what
+# lets CI enforce "100% source coverage" as a gate rather than just a number someone has to notice.
+#
+# Note: Bun 1.3.1's `coveragePathIgnorePatterns` was tried here to exclude test-support modules
+# (tests/helpers/*, tests/integration/test-app.ts) from the report, but empirically has no effect
+# in this version (verified with a throwaway repro: even a catch-all ".*" pattern changed nothing).
+# So those support files are covered for real instead (see tests/unit/camera-simulator.test.ts) —
+# they're small, and it keeps `coverageThreshold = 1` meaningful across every file this run touches.
+coverageSkipTestFiles = true
+coverageThreshold = { lines = 1, functions = 1 }

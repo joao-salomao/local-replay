@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { mkdtempSync, readFileSync, statSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ensureCert } from "@server/cert";
@@ -34,5 +34,17 @@ describe("ensureCert", () => {
     const dir = mkdtempSync(join(tmpdir(), "replay-cert-"));
     const { keyPath } = await ensureCert(dir);
     expect(statSync(keyPath).mode & 0o777).toBe(0o600);
+  }, 30_000);
+
+  it("throws when openssl fails (e.g. can't write cert/key to an unwritable certs dir)", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "replay-cert-fail-"));
+    const certsDir = join(dir, "certs");
+    mkdirSync(certsDir, { recursive: true });
+    chmodSync(certsDir, 0o500); // read+execute only: openssl can't create cert.pem/key.pem here
+    try {
+      await expect(ensureCert(dir)).rejects.toThrow(/openssl failed/);
+    } finally {
+      chmodSync(certsDir, 0o700); // restore so the OS can clean up this temp dir normally
+    }
   }, 30_000);
 });

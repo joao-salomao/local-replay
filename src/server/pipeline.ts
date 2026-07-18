@@ -54,14 +54,27 @@ export function slugify(name: string): string {
  * `anglePaths` ends up empty and `outputs.combined` stays `null`, so the job surfaces as an error
  * with per-angle messages instead of an ffmpeg stderr dump.
  */
-export async function processClip(o: {
-  clipDir: string;
-  t: number;
-  windowSec: number;
-  angles: RawAngle[];
-  config: Config;
-}): Promise<{ outputs: ClipOutputs; cameras: ClipCamera[]; errors: string[] }> {
+/** Test-only injection seam (mirrors `clip-job.ts`'s `Deps.processFn` pattern): lets a test
+ * substitute the side-by-side combine step with a fake that fails on demand, to exercise the
+ * best-effort catch around it (see `processClip`'s docstring) without needing a real ffmpeg
+ * failure. Defaults to the real `runFfmpeg`, so the production call path (no `deps` argument) is
+ * byte-identical to before this seam existed. */
+export type ProcessClipDeps = {
+  combineSideBySideFn?: (args: string[]) => Promise<void>;
+};
+
+export async function processClip(
+  o: {
+    clipDir: string;
+    t: number;
+    windowSec: number;
+    angles: RawAngle[];
+    config: Config;
+  },
+  deps: ProcessClipDeps = {},
+): Promise<{ outputs: ClipOutputs; cameras: ClipCamera[]; errors: string[] }> {
   const { clipDir, t, windowSec, config } = o;
+  const runSideBySideCombine = deps.combineSideBySideFn ?? runFfmpeg;
   const width = Math.round((config.targetHeight * 16) / 9);
   const windowStartMs = t - windowSec * 1000;
   const outputs: ClipOutputs = { combined: null, combinedSideBySide: null, angles: {} };
@@ -174,7 +187,7 @@ export async function processClip(o: {
         sideBySideOut,
       );
       log.debug("ffmpeg cmd", { cmd: sideBySideArgs.join(" ") });
-      await runFfmpeg(sideBySideArgs);
+      await runSideBySideCombine(sideBySideArgs);
       outputs.combinedSideBySide = "combined-side-by-side.mp4";
       log.info("combine side-by-side done", { output: sideBySideOut });
     } catch (e) {

@@ -36,5 +36,9 @@ jobs:
       - name: Format check
         run: bun run format:check
 
-      - name: Unit + integration tests
-        run: bun run test
+      # Runs the same unit + integration suite as `bun run test`, but with coverage collection
+      # on: bunfig.toml's `coverageThreshold = { lines = 1, functions = 1 }` makes this step fail
+      # the moment coverage of any measured src/ file drops below 100%, so a change that adds
+      # uncovered code (or deletes a test) fails CI here instead of silently regressing.
+      - name: Unit + integration tests (with 100% coverage gate)
+        run: bun run test:coverage

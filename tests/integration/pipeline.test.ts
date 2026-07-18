@@ -312,6 +312,40 @@ describe("processClip", () => {
     expect(result.outputs.combinedSideBySide).toBeNull(); // only 1 angle: no side-by-side
   }, 180_000);
 
+  it("side-by-side combine failure is resilient: the sequential combine and both angles still succeed (regression)", async () => {
+    // Uses the ProcessClipDeps injection seam to make ONLY the side-by-side combine step fail,
+    // while everything upstream of it (probing, normalizing both angles, the sequential combine)
+    // runs for real. This is the regression test for the best-effort try/catch around the
+    // side-by-side combine in processClip: its failure must be recorded in `errors` without
+    // taking down the angles or the sequential `combined.mp4` that already succeeded.
+    const clipDir = mkdtempSync(join(tmpdir(), "replay-clip-"));
+    mkdirSync(join(clipDir, "raw"), { recursive: true });
+    const result = await processClip(
+      {
+        clipDir,
+        t: 100_000,
+        windowSec: 5,
+        config,
+        angles: [
+          { name: "A", slug: "a", files: [{ path: rawB0, startMs: 90_000 }] },
+          { name: "B", slug: "b", files: [{ path: rawB0, startMs: 90_000 }] },
+        ],
+      },
+      {
+        combineSideBySideFn: async () => {
+          throw new Error("simulated side-by-side ffmpeg failure");
+        },
+      },
+    );
+    expect(Object.keys(result.outputs.angles).sort()).toEqual(["a", "b"]);
+    expect(result.outputs.combined).toBe("combined.mp4"); // sequential combine: unaffected
+    expect(existsSync(join(clipDir, "combined.mp4"))).toBe(true);
+    expect(result.outputs.combinedSideBySide).toBeNull(); // side-by-side: failed, stays null
+    expect(result.errors.length).toBe(1);
+    expect(result.errors[0]).toContain("side-by-side combine");
+    expect(result.errors[0]).toContain("simulated side-by-side ffmpeg failure");
+  }, 180_000);
+
   it("locked camera angle is skipped, clip still produced from the other angle", async () => {
     const clipDir = mkdtempSync(join(tmpdir(), "replay-clip-"));
     mkdirSync(join(clipDir, "raw"), { recursive: true });
