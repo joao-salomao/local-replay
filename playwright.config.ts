@@ -30,7 +30,7 @@ export default defineConfig({
   webServer: [
     {
       command:
-        "bun run tests/e2e/seed.ts && DATA_DIR=.e2e-data HTTPS_PORT=8543 HTTP_PORT=8580 PASSWORD=e2e CLIP_DURATION_SECONDS=10 bun run src/server/index.ts",
+        "bun run tests/e2e/seed.ts && DATA_DIR=.e2e-data HTTPS_PORT=8543 HTTP_PORT=8580 PASSWORD=e2e SESSION_SECRET=e2e-secret CLIP_DURATION_SECONDS=10 bun run src/server/index.ts",
       url: "https://localhost:8543",
       ignoreHTTPSErrors: true,
       reuseExistingServer: false,
@@ -38,7 +38,7 @@ export default defineConfig({
     },
     {
       command:
-        "bun run tests/e2e/seed.ts .e2e-data-buffer && DATA_DIR=.e2e-data-buffer HTTPS_PORT=8544 HTTP_PORT=8581 PASSWORD=e2e CLIP_DURATION_SECONDS=10 bun run src/server/index.ts",
+        "bun run tests/e2e/seed.ts .e2e-data-buffer && DATA_DIR=.e2e-data-buffer HTTPS_PORT=8544 HTTP_PORT=8581 PASSWORD=e2e SESSION_SECRET=e2e-secret CLIP_DURATION_SECONDS=10 bun run src/server/index.ts",
       url: "https://localhost:8544",
       ignoreHTTPSErrors: true,
       reuseExistingServer: false,

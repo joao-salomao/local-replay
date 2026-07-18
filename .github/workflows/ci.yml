@@ -95,7 +95,7 @@ jobs:
 
       - name: Boot the container and smoke-test it
         run: |
-          docker run --rm -d -p 8443:8443 -e HOST_LAN_IP=127.0.0.1 -e PASSWORD=ci-smoke-test --name lr-ci local-replay:ci
+          docker run --rm -d -p 8443:8443 -e HOST_LAN_IP=127.0.0.1 -e PASSWORD=ci-smoke-test -e SESSION_SECRET=ci-smoke-secret --name lr-ci local-replay:ci
           # Wait for the server to generate its cert and start serving.
           for _ in $(seq 1 30); do
             if curl -fsk https://localhost:8443/ >/dev/null 2>&1; then break; fi

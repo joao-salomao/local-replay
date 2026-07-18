@@ -1,12 +1,10 @@
-import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { createHmac, timingSafeEqual } from "node:crypto";
 
 /**
  * Password login and stateless session tokens. There is no server-side session store: a session
  * is just `${expiryMs}.${hmac(expiryMs)}`, verified by recomputing the HMAC — so verification
  * needs no lookup, and (unlike a session table) surviving a restart doesn't require any state
- * beyond the on-disk HMAC secret.
+ * beyond the HMAC secret, which comes from `SESSION_SECRET` in the environment (see `config.ts`).
  */
 
 export const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
@@ -14,27 +12,10 @@ export const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 export class Auth {
   constructor(
     private secret: string,
+    // `password` is a getter (not a value) so `Auth` reads the configured password rather than
+    // capturing a copy at construction.
     private password: () => string,
   ) {}
-
-  /**
-   * Loads (or creates, on first run) the persistent HMAC secret at `<dataDir>/session-secret`,
-   * chmod 0600. Persisting it — rather than generating a fresh secret per boot — matters because
-   * every existing session's token was signed with it: regenerating on each restart would log
-   * every user out on every deploy/restart. (Unlike the app config, this secret stays a file — it's
-   * an internal signing key, not user-facing config, and persisting it is what keeps sessions alive
-   * across restarts.) `password` is a getter (not a value) so `Auth` reads the current
-   * `ConfigStore` password rather than capturing it once at construction.
-   */
-  static load(dataDir: string, password: () => string): Auth {
-    mkdirSync(dataDir, { recursive: true });
-    const path = join(dataDir, "session-secret");
-    if (!existsSync(path)) {
-      writeFileSync(path, randomBytes(32).toString("hex"));
-      chmodSync(path, 0o600);
-    }
-    return new Auth(readFileSync(path, "utf8").trim(), password);
-  }
 
   /**
    * Checks `password` against the configured password and, on success, returns a fresh signed

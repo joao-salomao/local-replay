@@ -8,7 +8,7 @@ import { processClip } from "@server/pipeline";
 
 setDefaultTimeout(180_000);
 
-const config: Config = { password: "x", ...DEFAULT_CONFIG };
+const config: Config = { password: "x", sessionSecret: "x", ...DEFAULT_CONFIG };
 let rawA0: string, rawA1: string, rawB0: string, rawAudioOnly: string, rawGappedCorrupt: string;
 
 async function synth(path: string, seconds: number): Promise<void> {

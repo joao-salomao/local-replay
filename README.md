@@ -41,9 +41,10 @@ The script detects your machine's IP on the local network, brings up `docker com
 the image the first time) and prints the entry URL in the terminal along with a **QR code**. Point
 each phone's camera at the terminal's QR code (or type the URL manually) to open the system.
 
-**Before the first run**, set your access password: copy `.env.example` to `.env` and set
-`PASSWORD=` to something short and easy to type on a phone keyboard — the server won't boot without
-it. Every other setting is optional (they all have defaults); see [Configuration](#configuration).
+**Before the first run**, copy `.env.example` to `.env` and set `PASSWORD=` to something short and
+easy to type on a phone keyboard — the server won't boot without it. `SESSION_SECRET` ships with a
+working example value; **generate your own** (`openssl rand -hex 32`) if you'll expose the app to the
+internet. Every other setting is optional (defaults); see [Configuration](#configuration).
 
 To stop: `Ctrl+C` in the terminal where `start.sh` is running, or `docker compose down` in another
 terminal. The data (certificate, clips) is persisted in `./data` on the host thanks to the
@@ -116,12 +117,13 @@ server reads them once at startup, so changing one means editing `.env` and rest
 `CLIP_DURATION_SECONDS` and `AUDIO_SOURCE_NAME`, which can also be changed **live** on `/control`
 (that live change is in-memory only and reverts to the `.env` value on the next restart).
 
-**`PASSWORD` is required** — the server refuses to boot without it (there's no auto-generated
-password anymore). Everything else has a default.
+**`PASSWORD` and `SESSION_SECRET` are required** — the server refuses to boot without them (there's
+no auto-generated password or on-disk secret anymore). Everything else has a default.
 
 | Variable | Default | Description |
 |---|---|---|
 | `PASSWORD` | *(required)* | Shared access password players type to log in. The server won't boot if it's unset. |
+| `SESSION_SECRET` | *(required)* | HMAC key that signs session cookies. Keep it stable across restarts (changing it logs everyone out). `.env.example` ships a working example — generate your own (`openssl rand -hex 32`) before exposing the app to the internet. |
 | `CLIP_DURATION_SECONDS` | `20` | Clip length (seconds) for a play. Also adjustable live in `/control` (until restart). |
 | `CLIP_DURATION_MAX_SECONDS` | `60` | Ceiling accepted for the clip duration (the server rejects higher values). |
 | `BUFFER_CYCLE_MIN_SECONDS` | `30` | Minimum duration of each camera's buffer cycle. The actual cycle used is `max(BUFFER_CYCLE_MIN_SECONDS, CLIP_DURATION_SECONDS + 5)` — the extra 5s of slack lets the server always cut the **full** requested duration even across a recording-cycle boundary (prevents short clips, e.g. 9.6s for a requested 10s). |
@@ -279,7 +281,6 @@ Everything under `data/` (a volume mapped by `docker-compose.yml`; no database):
 
 ```
 data/
-├── session-secret        # key used to sign the session cookie (all config lives in .env, not here)
 ├── certs/                 # self-signed certificate (generated on first boot; regenerated if HOST_LAN_IP changes)
 │   ├── cert.pem
 │   └── key.pem

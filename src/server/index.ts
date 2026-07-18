@@ -62,7 +62,7 @@ const ctx: AppContext = {
   dataDir,
   config,
   storage,
-  auth: Auth.load(dataDir, () => config.value.password),
+  auth: new Auth(config.value.sessionSecret, () => config.value.password),
   hub,
   loginLimiter: new RateLimiter(5, 60_000),
   trustProxy: behindProxy,

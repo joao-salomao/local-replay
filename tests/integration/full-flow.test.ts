@@ -21,7 +21,7 @@ beforeAll(async () => {
   app = await createAppForTest(
     dataDir,
     { cooldownMs: 0 },
-    { env: { PASSWORD: "senha", CLIP_DURATION_SECONDS: "10" } },
+    { env: { PASSWORD: "senha", SESSION_SECRET: "s", CLIP_DURATION_SECONDS: "10" } },
   );
   rawDir = mkdtempSync(join(tmpdir(), "replay-flow-raw-"));
   raw = join(rawDir, "raw.mp4");

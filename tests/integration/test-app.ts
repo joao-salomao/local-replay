@@ -22,7 +22,9 @@ export async function createAppForTest(
     env?: Record<string, string | undefined>;
   } = {},
 ) {
-  const config = ConfigStore.fromEnv(opts.env ?? { PASSWORD: "senha-teste" });
+  const config = ConfigStore.fromEnv(
+    opts.env ?? { PASSWORD: "senha-teste", SESSION_SECRET: "test-secret" },
+  );
   const storage = new Storage(dataDir);
   const hub = new Hub();
   const queue = new SerialQueue();
@@ -44,7 +46,7 @@ export async function createAppForTest(
     dataDir,
     config,
     storage,
-    auth: Auth.load(dataDir, () => config.value.password),
+    auth: new Auth(config.value.sessionSecret, () => config.value.password),
     hub,
     loginLimiter: opts.loginLimiter ?? new RateLimiter(100, 60_000),
     trustProxy: opts.trustProxy ?? false,

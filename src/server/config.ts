@@ -9,6 +9,9 @@
 
 export type Config = {
   password: string;
+  /** HMAC secret used to sign session cookies (`auth.ts`). Required like `password`: keeping it
+   * stable across restarts is what keeps existing sessions valid, so set a fixed value in `.env`. */
+  sessionSecret: string;
   /** Current per-clip capture window, seconds. Initial value from `CLIP_DURATION_SECONDS`; can be
    * changed live via the control page (in-memory only — resets to the env value on restart). */
   clipDurationSeconds: number;
@@ -28,7 +31,7 @@ export type Config = {
 };
 
 /** Built-in defaults for every field except the (required) password. Also used as test fixtures. */
-export const DEFAULT_CONFIG: Omit<Config, "password"> = {
+export const DEFAULT_CONFIG: Omit<Config, "password" | "sessionSecret"> = {
   clipDurationSeconds: 20,
   clipDurationMaxSeconds: 60,
   bufferCycleMinSeconds: 30,
@@ -68,9 +71,14 @@ export class ConfigStore {
     if (!password) {
       throw new Error("PASSWORD is required — set it in your .env (see .env.example).");
     }
+    const sessionSecret = env.SESSION_SECRET?.trim();
+    if (!sessionSecret) {
+      throw new Error("SESSION_SECRET is required — set it in your .env (see .env.example).");
+    }
     const retention = env.RETENTION_DAYS?.trim();
     return new ConfigStore({
       password,
+      sessionSecret,
       clipDurationSeconds: numEnv(env.CLIP_DURATION_SECONDS, DEFAULT_CONFIG.clipDurationSeconds),
       clipDurationMaxSeconds: numEnv(
         env.CLIP_DURATION_MAX_SECONDS,
