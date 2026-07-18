@@ -15,7 +15,7 @@ jobs:
     name: Test (unit + integration)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2
@@ -47,7 +47,7 @@ jobs:
     name: E2E (Playwright)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2
@@ -83,7 +83,7 @@ jobs:
     name: Docker build + smoke test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # Builds the production image exactly as `start.sh` does. This catches
       # container-only regressions the unit/integration suite can't — e.g. a runtime
