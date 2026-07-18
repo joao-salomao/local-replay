@@ -84,35 +84,36 @@ $("record").onclick = async () => {
   }
 };
 
-const ws = new WsClient();
-ws.onStatus = (connected) => {
-  $("conn-dot").classList.toggle("on", connected);
-  if (connected) ws.send({ type: "register", role: "control" });
-};
-ws.onMessage = (msg: ServerMessage) => {
-  if (msg.type === "state") {
-    state = {
-      ...state,
-      cameras: msg.cameras,
-      clipDurationSeconds: msg.clipDurationSeconds,
-      jobs: msg.jobs,
-      freeDiskGB: msg.freeDiskGB,
-    };
-    render();
-  }
-  if (msg.type === "jobUpdate") {
-    // Replace-or-insert by jobId, then re-sort and cap at 20 — mirrors the server's own
-    // JobManager.recent[] cap (clip-job.ts) so this list matches server-side retention, and
-    // re-sorts because a jobUpdate for an older (e.g. slower-finalizing) job can arrive after a
-    // newer job's own update.
-    const rest = state.jobs.filter((j) => j.jobId !== msg.job.jobId);
-    state.jobs = [msg.job, ...rest].sort((a, b) => b.createdAt - a.createdAt).slice(0, 20);
-    render();
-  }
-  if (msg.type === "log") {
-    if (addLogEntries([msg.entry]) && $<HTMLDetailsElement>("log-section").open) renderLogs();
-  }
-};
+const ws = new WsClient({
+  onStatus: (connected) => {
+    $("conn-dot").classList.toggle("on", connected);
+    if (connected) ws.send({ type: "register", role: "control" });
+  },
+  onMessage: (msg: ServerMessage) => {
+    if (msg.type === "state") {
+      state = {
+        ...state,
+        cameras: msg.cameras,
+        clipDurationSeconds: msg.clipDurationSeconds,
+        jobs: msg.jobs,
+        freeDiskGB: msg.freeDiskGB,
+      };
+      render();
+    }
+    if (msg.type === "jobUpdate") {
+      // Replace-or-insert by jobId, then re-sort and cap at 20 — mirrors the server's own
+      // JobManager.recent[] cap (clip-job.ts) so this list matches server-side retention, and
+      // re-sorts because a jobUpdate for an older (e.g. slower-finalizing) job can arrive after a
+      // newer job's own update.
+      const rest = state.jobs.filter((j) => j.jobId !== msg.job.jobId);
+      state.jobs = [msg.job, ...rest].sort((a, b) => b.createdAt - a.createdAt).slice(0, 20);
+      render();
+    }
+    if (msg.type === "log") {
+      if (addLogEntries([msg.entry]) && $<HTMLDetailsElement>("log-section").open) renderLogs();
+    }
+  },
+});
 ws.connect();
 
 // Initial paint from a plain fetch — WS `state` broadcasts only fire on subsequent changes, so

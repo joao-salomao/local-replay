@@ -409,16 +409,17 @@ $("start").onclick = async () => {
   $("live").hidden = false;
   await keepAwake();
 
-  ws = new WsClient();
-  ws.onStatus = (connected) => {
-    $("conn-dot").classList.toggle("on", connected);
-    $("conn-text").textContent = connected ? "Conectado" : "Desconectado";
-    if (connected) {
-      ws.send({ type: "register", role: "camera", name });
-      setTimeout(() => startCycle(), 800); // wait for first ntp samples
-    }
-  };
-  ws.onMessage = handleMessage;
+  ws = new WsClient({
+    onStatus: (connected) => {
+      $("conn-dot").classList.toggle("on", connected);
+      $("conn-text").textContent = connected ? "Conectado" : "Desconectado";
+      if (connected) {
+        ws.send({ type: "register", role: "camera", name });
+        setTimeout(() => startCycle(), 800); // wait for first ntp samples
+      }
+    },
+    onMessage: handleMessage,
+  });
   ws.connect();
 
   watchTrack();

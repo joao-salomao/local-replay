@@ -2,16 +2,33 @@ import { computeOffset, type NtpSample } from "@shared/clock";
 import type { ClientMessage, ServerMessage } from "@shared/protocol";
 
 /**
+ * Handlers a `WsClient` is constructed with. Both are optional (each defaults to a no-op, for a
+ * caller that only cares about one side), but they're wired ONCE at construction and kept
+ * `readonly` — so a client is fully configured the moment it exists, rather than relying on callers
+ * to assign public `onMessage`/`onStatus` callbacks after the fact (easy to forget, and any later
+ * code could silently clobber them).
+ */
+export type WsClientHandlers = {
+  onMessage?: (msg: ServerMessage) => void;
+  onStatus?: (connected: boolean) => void;
+};
+
+/**
  * Shared WebSocket client for the camera and control pages: auto-reconnecting `/ws` connection,
  * a keepalive heartbeat, and NTP-style clock sync exposed as `serverNow()`.
  */
 export class WsClient {
-  onMessage: (msg: ServerMessage) => void = () => {};
-  onStatus: (connected: boolean) => void = () => {};
+  private readonly onMessage: (msg: ServerMessage) => void;
+  private readonly onStatus: (connected: boolean) => void;
   private ws: WebSocket | null = null;
   private offset = 0;
   private samples: NtpSample[] = [];
   private timers: number[] = [];
+
+  constructor(handlers: WsClientHandlers = {}) {
+    this.onMessage = handlers.onMessage ?? (() => {});
+    this.onStatus = handlers.onStatus ?? (() => {});
+  }
 
   /** Opens the connection and (re)arms its timers. On close, auto-reconnects after a fixed 1.5s
    * delay — simple and sufficient for a LAN tool with a handful of clients reconnecting to one
