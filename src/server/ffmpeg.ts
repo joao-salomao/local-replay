@@ -147,25 +147,50 @@ export function combineSequentialArgs(listFile: string, output: string): string[
   ];
 }
 
-/** Builds a `hstack` filter graph combining exactly two angle outputs into one side-by-side
- * frame, each pane scaled/padded to half the target width. Requires re-encoding (no `-c copy`). */
+/**
+ * Builds a filter graph tiling N (N >= 2) already-normalized angle outputs into ONE simultaneous
+ * "same timeframe" frame, laid out on a near-square grid: `cols = ceil(sqrt(N))` columns by
+ * `rows = ceil(N / cols)` rows. So N=2 stays a single side-by-side row, N=3-4 become a 2x2, N=6 a
+ * 3x2, N=9 a 3x3, and so on — every angle is included, not just the first two.
+ *
+ * Each angle is scaled (aspect-preserving) and letterbox-padded into one uniform cell
+ * (`width/cols` x `height/rows`, each rounded DOWN to an even number since yuv420p requires even
+ * dimensions) and placed left-to-right, top-to-bottom via `xstack`'s explicit `layout` (cell
+ * `i` sits at pixel offset `(i%cols)*cellW _ floor(i/cols)*cellH`). When N doesn't fill the last
+ * row (e.g. 3 angles in a 2x2), `xstack`'s `fill=black` paints the leftover cell(s) — this option
+ * needs ffmpeg >= 5.0, which every deployment target clears (the Docker image's Debian ffmpeg, the
+ * CI runner's, and any modern local install).
+ *
+ * Requires re-encoding (no `-c copy`). Audio is taken from the FIRST angle only (`-map 0:a:0`):
+ * all angles capture the same moment, so mixing their tracks would just echo. Every input is
+ * equal-length CFR (guaranteed by `normalizeCutArgs`), so `xstack` terminates cleanly at that one
+ * shared length rather than running to some longest/shortest mismatch.
+ */
 export function combineSideBySideArgs(
-  inputs: [string, string],
+  inputs: string[],
   o: { width: number; height: number; fps: number },
   output: string,
 ): string[] {
-  const half = Math.floor(o.width / 2);
-  const pane = (i: number, label: string) =>
-    `[${i}:v]scale=${half}:${o.height}:force_original_aspect_ratio=decrease,pad=${half}:${o.height}:(ow-iw)/2:(oh-ih)/2[${label}]`;
+  const n = inputs.length;
+  const cols = Math.ceil(Math.sqrt(n));
+  const rows = Math.ceil(n / cols);
+  const even = (x: number) => Math.floor(x / 2) * 2;
+  const cellW = even(o.width / cols);
+  const cellH = even(o.height / rows);
+  const panes = inputs
+    .map(
+      (_, i) =>
+        `[${i}:v]scale=${cellW}:${cellH}:force_original_aspect_ratio=decrease,pad=${cellW}:${cellH}:(ow-iw)/2:(oh-ih)/2[p${i}]`,
+    )
+    .join(";");
+  const layout = inputs.map((_, i) => `${(i % cols) * cellW}_${Math.floor(i / cols) * cellH}`);
+  const labels = inputs.map((_, i) => `[p${i}]`).join("");
   return [
     "-hide_banner",
     "-y",
-    "-i",
-    inputs[0],
-    "-i",
-    inputs[1],
+    ...inputs.flatMap((input) => ["-i", input]),
     "-filter_complex",
-    `${pane(0, "l")};${pane(1, "r")};[l][r]hstack=inputs=2,fps=${o.fps}[v]`,
+    `${panes};${labels}xstack=inputs=${n}:layout=${layout.join("|")}:fill=black,fps=${o.fps}[v]`,
     "-map",
     "[v]",
     "-map",

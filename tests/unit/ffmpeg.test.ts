@@ -96,14 +96,52 @@ describe("combine builders", () => {
     );
   });
 
-  it("side-by-side stacks two halves at target size", () => {
+  it("grid: N=2 stays a single side-by-side row at target size", () => {
     const args = combineSideBySideArgs(
       ["/a.mp4", "/b.mp4"],
       { width: 1920, height: 1080, fps: 60 },
       "/out/c.mp4",
     ).join(" ");
     expect(args).toContain("scale=960:1080:force_original_aspect_ratio=decrease");
-    expect(args).toContain("hstack=inputs=2");
+    expect(args).toContain("xstack=inputs=2:layout=0_0|960_0:fill=black");
     expect(args).toContain("-map 0:a:0");
+  });
+
+  it("grid: N=3 tiles ALL three angles into a 2x2 (one empty cell), not just the first two", () => {
+    const args = combineSideBySideArgs(
+      ["/a.mp4", "/b.mp4", "/c.mp4"],
+      { width: 1920, height: 1080, fps: 30 },
+      "/out/c.mp4",
+    );
+    const joined = args.join(" ");
+    // The bug was that only the first two angles ever became inputs. Assert all three do.
+    expect(args.filter((a) => a === "-i")).toHaveLength(3);
+    expect(joined).toContain("/a.mp4");
+    expect(joined).toContain("/b.mp4");
+    expect(joined).toContain("/c.mp4");
+    // 2 cols x 2 rows: uniform 960x540 cells, third pane on the second row, empty 4th filled black.
+    expect(joined).toContain("scale=960:540:force_original_aspect_ratio=decrease");
+    expect(joined).toContain("xstack=inputs=3:layout=0_0|960_0|0_540:fill=black");
+  });
+
+  it("grid: N=4 fills a clean 2x2", () => {
+    const joined = combineSideBySideArgs(
+      ["/a.mp4", "/b.mp4", "/c.mp4", "/d.mp4"],
+      { width: 1920, height: 1080, fps: 30 },
+      "/out/c.mp4",
+    ).join(" ");
+    expect(joined).toContain("xstack=inputs=4:layout=0_0|960_0|0_540|960_540:fill=black");
+  });
+
+  it("grid: N=6 becomes 3x2", () => {
+    const joined = combineSideBySideArgs(
+      ["/a.mp4", "/b.mp4", "/c.mp4", "/d.mp4", "/e.mp4", "/f.mp4"],
+      { width: 1920, height: 1080, fps: 30 },
+      "/out/c.mp4",
+    ).join(" ");
+    // cols=ceil(sqrt(6))=3 -> 640-wide cells, rows=2 -> 540-tall cells.
+    expect(joined).toContain(
+      "xstack=inputs=6:layout=0_0|640_0|1280_0|0_540|640_540|1280_540:fill=black",
+    );
   });
 });

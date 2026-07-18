@@ -198,6 +198,40 @@ describe("processClip", () => {
     expect(sideBySide.durationSec).toBeLessThan(10.5);
   }, 180_000);
 
+  it("side-by-side tiles ALL angles into a simultaneous grid, not just the first two (regression)", async () => {
+    // Regression for the bug where the side-by-side combine only ever included the first two
+    // angles (a hardcoded 2-input hstack). With three angles it must produce a real 3-input grid
+    // (a 2x2 xstack with one empty cell) at the target size, and — because it's SIMULTANEOUS, not
+    // sequential — last ~1x a single angle, never ~3x. A pre-fix build silently dropped the third
+    // angle; a naive N-input build that mis-wired the filter graph would make ffmpeg exit non-zero
+    // (surfaced here as a non-empty `errors`), so this exercises the real 3-input ffmpeg run end
+    // to end, not just the arg string (that's the unit test's job).
+    const clipDir = mkdtempSync(join(tmpdir(), "replay-clip-"));
+    mkdirSync(join(clipDir, "raw"), { recursive: true });
+    const result = await processClip({
+      clipDir,
+      t: 100_000,
+      windowSec: 5,
+      config,
+      angles: [
+        { name: "A", slug: "a", files: [{ path: rawB0, startMs: 90_000 }] },
+        { name: "B", slug: "b", files: [{ path: rawB0, startMs: 90_000 }] },
+        { name: "C", slug: "c", files: [{ path: rawB0, startMs: 90_000 }] },
+      ],
+    });
+    expect(result.errors).toEqual([]);
+    expect(Object.keys(result.outputs.angles).sort()).toEqual(["a", "b", "c"]);
+    expect(result.outputs.combinedSideBySide).toBe("combined-side-by-side.mp4");
+
+    const single = await probe(join(clipDir, "angle-a.mp4"));
+    const sideBySide = await probe(join(clipDir, "combined-side-by-side.mp4"));
+    expect(sideBySide.width).toBe(1920);
+    expect(sideBySide.height).toBe(1080);
+    // Simultaneous grid: ~1x a single angle (all three play at once), NOT ~3x (which would mean it
+    // fell back to concatenating them one after another).
+    expect(sideBySide.durationSec).toBeLessThan(single.durationSec * 1.3);
+  }, 180_000);
+
   it("processes an angle whose raw files are cwd-relative paths (matches a relative DATA_DIR in prod)", async () => {
     // Reproduces the prod failure: with DATA_DIR="data" the raw file paths are relative to cwd,
     // and ffmpeg's concat demuxer resolves list entries relative to the LIST FILE's dir — doubling
