@@ -59,22 +59,25 @@ After opening the URL, each device enters the password and picks a role:
   warning and recovers the buffer on its own if the tab is hidden or the operating system pauses
   the camera in the background).
 - **🔴 Controlar gravação** (Control recording) — the control page: a big **GRAVAR** button, a
-  clip duration selector (10/20/30/45/60s), a list of the cameras online with each one's live
-  resolution/fps, the status of the last play (capturando → processando → pronto — capturing →
-  processing → ready), and a QR code for other devices to join. It can be used by any
-  authenticated phone or by a dedicated tablet.
+  clip duration selector (10/20/30/45/60s), a selector for **which camera's audio** goes into the
+  combined video, a list of the cameras online with each one's live resolution/fps **and the
+  physical camera/lens it's using**, the status of the last play (capturando → processando →
+  pronto — capturing → processing → ready), a collapsible **server-log viewer**, and a QR code for
+  other devices to join. It can be used by any authenticated phone or by a dedicated tablet.
 - **🎬 Ver lances** (View plays) — the gallery (`/clips`): lists the most recent clips first, with
-  a player, download links (combined + each individual angle), a **📤 Compartilhar** (Share)
-  button (opens the phone's native share menu, with a fallback to download on browsers without
-  that API), and a QR code per clip pointing straight to the video file.
+  players for the sequential and the side-by-side combined videos, download links (both combined
+  videos + each individual angle), a **📤 Compartilhar** (Share) button (opens the phone's native
+  share menu, with a fallback to download on browsers without that API), and a QR code per clip
+  pointing straight to the video file.
 
 **Flow of a play:** the cameras stay connected, filming and buffering the last few seconds
 locally. When someone presses GRAVAR on `/control`, the server records the instant `T`, creates a
 job, and notifies every camera that's online. Each camera finishes the segment in progress and
 sends the buffer files covering the window `[T − duration, T]`. The server waits for the uploads
 (up to 30s — whoever doesn't deliver in time is left out of the play, which still comes out with
-the remaining angles), processes them with FFmpeg (exact cut, normalization, combining the
-angles), and the clip appears in `/clips`; `/control` shows "Lance pronto" (Play ready).
+the remaining angles), processes them with FFmpeg (exact cut, normalization, and combining the
+angles two ways — one after another, and all at once in a side-by-side grid), and the clip appears
+in `/clips`; `/control` shows "Lance pronto" (Play ready).
 
 ## Connecting Each Device
 
@@ -115,8 +118,9 @@ the selector in `/control`, without touching the file or restarting):
 |---|---|---|
 | `clipDurationSeconds` | `20` | Clip duration (seconds) used for the **next** play. Also adjustable live in `/control`. |
 | `clipDurationMaxSeconds` | `60` | Ceiling accepted for `clipDurationSeconds` (the server rejects higher values). |
-| `bufferCycleMinSeconds` | `30` | Minimum duration of each camera's buffer cycle. The actual cycle used is `max(bufferCycleMinSeconds, clipDurationSeconds)`. |
-| `layout` | `"sequential"` | `"sequential"` (angles in sequence, hard cut) or `"side-by-side"` (angles side by side on screen, audio from the first angle). |
+| `bufferCycleMinSeconds` | `30` | Minimum duration of each camera's buffer cycle. The actual cycle used is `max(bufferCycleMinSeconds, clipDurationSeconds + 5)` — the extra 5s of slack lets the server always cut the **full** requested duration, even when a play's window straddles a recording-cycle boundary (prevents short clips, e.g. 9.6s for a requested 10s). |
+| `layout` | `"sequential"` | Legacy field — no longer selects the output. Every play now produces **both** a sequential `combined.mp4` and a simultaneous grid `combined-side-by-side.mp4`. Kept only for backward compatibility. |
+| `audioSourceName` | `null` | Display name of the camera whose audio is used in the side-by-side grid. `null` = automatic (the first angle). Also selectable live in `/control`. |
 | `targetHeight` | `1080` | Target height (px) of the normalized output. |
 | `targetFps` | `60` | Target FPS of the normalized output. |
 | `retentionDays` | `null` | Days to keep clips. `null` = keep everything forever. If set, cleanup runs on startup and then once a day. |
@@ -225,12 +229,18 @@ with no new variables — see [Getting Started](#getting-started) and
 ## Development
 
 ```bash
-bun install       # installs dependencies
+bun install       # installs dependencies (also sets up the husky git hooks)
 bun run dev       # starts the local server (bun run src/server/index.ts) — requires ffmpeg/openssl on PATH
 bun test          # runs the unit + integration suite (tests/unit and tests/integration)
 bun run test:e2e  # Playwright: full flow in a Chromium browser with a fake camera
+bun run check     # Biome check: formatting + lint + import order (biome check .)
+bun run typecheck # type-checks without emitting (tsc --noEmit)
 bun run format    # applies Biome formatting to the project (biome format --write .)
 ```
+
+A **husky** `pre-push` hook runs `bun run check`, `bun run typecheck`, and `bun test` before every
+push (installed automatically by `bun install`); the push is aborted if any step fails. Bypass in an
+emergency with `git push --no-verify`.
 
 > **Honest note about e2e:** `bun run test:e2e` needs a real Chromium browser that can complete
 > fake media capture via `--use-fake-device-for-media-stream` — this works reliably on standard
@@ -267,13 +277,14 @@ Everything under `data/` (a volume mapped by `docker-compose.yml`; no database):
 
 ```
 data/
-├── config.json           # password, clip duration, layout, target resolution/fps, retention
+├── config.json           # password, clip duration, audio source, target resolution/fps, retention
 ├── session-secret        # key used to sign the session cookie
 ├── certs/                 # self-signed certificate (generated on first boot; regenerated if HOST_LAN_IP changes)
 │   ├── cert.pem
 │   └── key.pem
 └── clips/2026-07-17/clip-042/
-    ├── combined.mp4
+    ├── combined.mp4               # every angle one after another (sequential)
+    ├── combined-side-by-side.mp4  # every angle at once, in a grid
     ├── angle-fundo.mp4     # angle name comes from the nickname given on the camera (slugified)
     ├── angle-lateral.mp4
     └── meta.json           # T, window, cameras, layout, duration, partial errors
