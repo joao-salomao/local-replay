@@ -13,6 +13,11 @@ export type CameraInfo = {
   width: number;
   height: number;
   fps: number;
+  /** Label of the physical camera/lens the device is currently capturing with (the getUserMedia
+   * video track's `label`, e.g. "FaceTime HD Camera", "Back Camera"); `""` until first reported, or
+   * if the browser withholds it. Shown on the control page so the operator can see which hardware
+   * each angle is on. */
+  deviceLabel: string;
 };
 
 /** Lifecycle of one triggered clip job: capturing uploads → processing (ffmpeg) → ready or error. */
@@ -43,14 +48,15 @@ export type LogEntry = {
  * - `register`: first message on a new connection; declares the connection's role. Camera
  *   connections supply a display `name`; the server assigns the actual `cameraId` (see `registered`).
  * - `ntp`: clock-sync probe, answered immediately with `ntpReply` regardless of registration state.
- * - `cameraStatus`: periodic (camera role only) report of actual capture resolution/fps.
+ * - `cameraStatus`: periodic (camera role only) report of actual capture resolution/fps and the
+ *   active camera's device `label` (which physical lens/camera the device is capturing with).
  * - `hb`: heartbeat/keepalive with no payload; see `web/shared/ws-client.ts` for why it's sent.
  */
 export type ClientMessage =
   | { type: "register"; role: "camera"; name: string }
   | { type: "register"; role: "control" }
   | { type: "ntp"; clientTime: number }
-  | { type: "cameraStatus"; width: number; height: number; fps: number }
+  | { type: "cameraStatus"; width: number; height: number; fps: number; label: string }
   | { type: "hb" };
 
 /**

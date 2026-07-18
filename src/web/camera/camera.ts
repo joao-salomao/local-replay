@@ -84,12 +84,14 @@ async function acquireMedia(deviceId: string | null): Promise<MediaStream> {
  * (re)connect and every 5s thereafter (see bottom of file) since fps/resolution can drift with
  * device heat/throttling — keeping both the control page's badge and this page's own display live. */
 function reportStatus(): void {
-  const s = stream.getVideoTracks()[0]!.getSettings();
+  const track = stream.getVideoTracks()[0]!;
+  const s = track.getSettings();
   ws.send({
     type: "cameraStatus",
     width: s.width ?? 0,
     height: s.height ?? 0,
     fps: Math.round(s.frameRate ?? 0),
+    label: track.label,
   });
   $("media-info").textContent =
     `${s.width}×${s.height} @ ${Math.round(s.frameRate ?? 0)}fps (60fps é melhor esforço — varia por aparelho)`;

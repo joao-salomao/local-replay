@@ -93,7 +93,7 @@ export class Hub {
         ws.data.cameraId = id;
         ws.subscribe(TOPIC_CAMERAS);
         this.camerasById.set(id, {
-          info: { id, name: msg.name, online: true, width: 0, height: 0, fps: 0 },
+          info: { id, name: msg.name, online: true, width: 0, height: 0, fps: 0, deviceLabel: "" },
           lastSeen: nowMs,
         });
         const reply: ServerMessage = { type: "registered", cameraId: id };
@@ -120,10 +120,12 @@ export class Hub {
         wasOffline ||
         cam.info.width !== msg.width ||
         cam.info.height !== msg.height ||
-        cam.info.fps !== msg.fps;
+        cam.info.fps !== msg.fps ||
+        cam.info.deviceLabel !== msg.label;
       cam.info.width = msg.width;
       cam.info.height = msg.height;
       cam.info.fps = msg.fps;
+      cam.info.deviceLabel = msg.label;
       if (changed) this.stateChangedListener(); // cameras re-report every 5s; only broadcast real changes
     } else if (wasOffline) {
       this.stateChangedListener();

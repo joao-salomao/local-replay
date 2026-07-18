@@ -49,7 +49,7 @@ function render(): void {
   $("cam-list").innerHTML = state.cameras
     .map(
       (c) =>
-        `<li>${c.online ? "🟢" : "🔴"} ${esc(c.name)} — ${c.width}×${c.height}@${c.fps}fps</li>`,
+        `<li>${c.online ? "🟢" : "🔴"} ${esc(c.name)}${c.deviceLabel ? ` · ${esc(c.deviceLabel)}` : ""} — ${c.width}×${c.height}@${c.fps}fps</li>`,
     )
     .join("");
   $("durations").innerHTML = DURATIONS.map(
@@ -216,9 +216,7 @@ function addLogEntries(entries: LogEntry[]): boolean {
 // — but every subsequent open re-renders from the current in-memory `logEntries` regardless, since
 // WS `log` messages that arrived while the section was collapsed were still merged into
 // `logEntries` above (see `ws.onMessage`), just not painted into the (hidden) DOM at the time.
-$<HTMLDetailsElement>("log-section").addEventListener("toggle", () => {
-  const section = $<HTMLDetailsElement>("log-section");
-  if (!section.open) return;
+function openLogSection(): void {
   if (!logBacklogLoaded) {
     logBacklogLoaded = true;
     void (async () => {
@@ -229,7 +227,14 @@ $<HTMLDetailsElement>("log-section").addEventListener("toggle", () => {
   } else {
     renderLogs();
   }
+}
+
+$<HTMLDetailsElement>("log-section").addEventListener("toggle", () => {
+  if ($<HTMLDetailsElement>("log-section").open) openLogSection();
 });
+// The section starts expanded (index.html has `open`), so load its backlog now — the `toggle`
+// event doesn't fire for the initial open state, only on a later user collapse/expand.
+if ($<HTMLDetailsElement>("log-section").open) openLogSection();
 
 $("log-clear").onclick = () => {
   // Clears only this page's view/local state — the server-side ring buffer (`/api/logs`) is left

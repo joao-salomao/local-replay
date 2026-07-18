@@ -46,10 +46,21 @@ describe("Hub", () => {
     void sent;
     hub.message(
       ws,
-      JSON.stringify({ type: "cameraStatus", width: 1920, height: 1080, fps: 60 }),
+      JSON.stringify({
+        type: "cameraStatus",
+        width: 1920,
+        height: 1080,
+        fps: 60,
+        label: "FaceTime HD Camera",
+      }),
       1000,
     );
-    expect(hub.cameras()[0]).toMatchObject({ width: 1920, fps: 60, online: true });
+    expect(hub.cameras()[0]).toMatchObject({
+      width: 1920,
+      fps: 60,
+      online: true,
+      deviceLabel: "FaceTime HD Camera",
+    });
 
     hub.sweep(1000 + OFFLINE_AFTER_MS + 1);
     expect(hub.cameras()[0]!.online).toBe(false);
@@ -70,21 +81,39 @@ describe("Hub", () => {
 
     hub.message(
       ws,
-      JSON.stringify({ type: "cameraStatus", width: 1920, height: 1080, fps: 60 }),
+      JSON.stringify({
+        type: "cameraStatus",
+        width: 1920,
+        height: 1080,
+        fps: 60,
+        label: "FaceTime HD Camera",
+      }),
       1000,
     );
     expect(changes).toBe(1); // first real values fire
 
     hub.message(
       ws,
-      JSON.stringify({ type: "cameraStatus", width: 1920, height: 1080, fps: 60 }),
+      JSON.stringify({
+        type: "cameraStatus",
+        width: 1920,
+        height: 1080,
+        fps: 60,
+        label: "FaceTime HD Camera",
+      }),
       2000,
     );
     expect(changes).toBe(1); // identical re-report: suppressed
 
     hub.message(
       ws,
-      JSON.stringify({ type: "cameraStatus", width: 1920, height: 1080, fps: 30 }),
+      JSON.stringify({
+        type: "cameraStatus",
+        width: 1920,
+        height: 1080,
+        fps: 30,
+        label: "FaceTime HD Camera",
+      }),
       3000,
     );
     expect(changes).toBe(2); // fps changed: fires
