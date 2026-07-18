@@ -1,6 +1,30 @@
+# Dependencies (reinstalled inside the image)
 node_modules
+
+# Runtime data — NEVER ship: config.json holds the shared password, certs hold the TLS key
 data
 .e2e-data
-docs
+
+# Tests, docs, specs (not needed at runtime)
 tests
+docs
+playwright.config.ts
+
+# Tooling / editor / VCS
 .git
+.gitignore
+.dockerignore
+.idea
+.vscode
+.superpowers
+biome.json
+
+# Build/deploy artifacts that don't belong in the image
+Dockerfile
+docker-compose.yml
+start.sh
+*.md
+
+# OS / logs noise
+.DS_Store
+*.log
