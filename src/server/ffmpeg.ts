@@ -179,11 +179,20 @@ export async function runFfmpeg(args: string[]): Promise<void> {
 }
 
 /** Runs `ffprobe` on `file` and extracts the fields `pipeline.ts` needs: duration, the first
- * video stream's resolution/fps (from `r_frame_rate`'s num/den), and whether any audio stream
- * is present. */
-export async function probe(
-  file: string,
-): Promise<{ durationSec: number; width: number; height: number; fps: number; hasAudio: boolean }> {
+ * video stream's resolution/fps (from `r_frame_rate`'s num/den), whether any audio stream is
+ * present, and whether any video stream is present at all (`hasVideo`). `hasVideo` matters
+ * because a locked iOS phone suspends its camera's video track while the mic keeps recording, so
+ * the uploaded segment can be an audio-only mp4 — `pipeline.ts` uses this flag to skip such an
+ * angle up front instead of handing it to ffmpeg, which would otherwise reject the `-map 0:v:0`
+ * with a cryptic "Stream map '' matches no streams" failure. */
+export async function probe(file: string): Promise<{
+  durationSec: number;
+  width: number;
+  height: number;
+  fps: number;
+  hasAudio: boolean;
+  hasVideo: boolean;
+}> {
   const proc = Bun.spawn(
     ["ffprobe", "-v", "error", "-print_format", "json", "-show_format", "-show_streams", file],
     { stdout: "pipe", stderr: "pipe" },
@@ -210,5 +219,6 @@ export async function probe(
     height: video?.height ?? 0,
     fps: den ? (num ?? 0) / den : 0,
     hasAudio: data.streams?.some((s) => s.codec_type === "audio") ?? false,
+    hasVideo: data.streams?.some((s) => s.codec_type === "video") ?? false,
   };
 }

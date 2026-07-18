@@ -9,7 +9,7 @@ import { processClip } from "../../src/server/pipeline";
 setDefaultTimeout(180_000);
 
 const config: Config = { password: "x", ...DEFAULT_CONFIG };
-let rawA0: string, rawA1: string, rawB0: string;
+let rawA0: string, rawA1: string, rawB0: string, rawAudioOnly: string;
 
 async function synth(path: string, seconds: number): Promise<void> {
   await runFfmpeg([
@@ -29,12 +29,44 @@ async function synth(path: string, seconds: number): Promise<void> {
   ]);
 }
 
+/** Simulates the production failure: an iOS phone camera locked mid-recording suspends the video
+ * track while the mic keeps going, so the uploaded segment is an audio-only mp4 (no video stream
+ * at all). */
+async function synthAudioOnly(path: string, seconds: number): Promise<void> {
+  await runFfmpeg([
+    "-hide_banner",
+    "-y",
+    "-f",
+    "lavfi",
+    "-i",
+    "anullsrc=r=48000:cl=mono",
+    "-t",
+    String(seconds),
+    "-c:a",
+    "aac",
+    path,
+  ]);
+}
+
 beforeAll(async () => {
   const dir = mkdtempSync(join(tmpdir(), "replay-raw-"));
   rawA0 = join(dir, "a0.mp4");
   rawA1 = join(dir, "a1.mp4");
   rawB0 = join(dir, "b0.mp4");
-  await Promise.all([synth(rawA0, 8), synth(rawA1, 8), synth(rawB0, 12)]);
+  rawAudioOnly = join(dir, "audio-only.mp4");
+  await Promise.all([
+    synth(rawA0, 8),
+    synth(rawA1, 8),
+    synth(rawB0, 12),
+    synthAudioOnly(rawAudioOnly, 12),
+  ]);
+});
+
+describe("probe", () => {
+  it("reports hasVideo accurately for audio-only vs. real video files", async () => {
+    expect((await probe(rawAudioOnly)).hasVideo).toBe(false);
+    expect((await probe(rawB0)).hasVideo).toBe(true);
+  });
 });
 
 describe("processClip", () => {
@@ -181,6 +213,49 @@ describe("processClip", () => {
     expect(Object.keys(result.outputs.angles)).toEqual(["ok"]);
     expect(result.errors.length).toBe(1);
     expect(result.outputs.combined).toBe("combined.mp4"); // single valid angle copied
+  }, 180_000);
+
+  it("locked camera angle is skipped, clip still produced from the other angle", async () => {
+    const clipDir = mkdtempSync(join(tmpdir(), "replay-clip-"));
+    mkdirSync(join(clipDir, "raw"), { recursive: true });
+    const result = await processClip({
+      clipDir,
+      t: 100_000,
+      windowSec: 5,
+      config,
+      angles: [
+        // locked phone: mic kept recording but iOS suspended the video track
+        { name: "iPhone", slug: "iphone", files: [{ path: rawAudioOnly, startMs: 90_000 }] },
+        { name: "Fundo", slug: "fundo", files: [{ path: rawB0, startMs: 90_000 }] },
+      ],
+    });
+    expect(result.errors.length).toBe(1);
+    expect(result.errors[0]).toContain("iphone");
+    expect(result.errors[0]).toContain("no video stream");
+    expect(Object.keys(result.outputs.angles)).toEqual(["fundo"]);
+    expect(result.outputs.combined).toBe("combined.mp4"); // produced from the one good angle
+    expect(existsSync(join(clipDir, "combined.mp4"))).toBe(true);
+
+    const combined = await probe(join(clipDir, "combined.mp4"));
+    expect(combined.hasVideo).toBe(true);
+  }, 180_000);
+
+  it("all cameras locked → job error, readable message, no combined", async () => {
+    const clipDir = mkdtempSync(join(tmpdir(), "replay-clip-"));
+    mkdirSync(join(clipDir, "raw"), { recursive: true });
+    const result = await processClip({
+      clipDir,
+      t: 100_000,
+      windowSec: 5,
+      config,
+      angles: [
+        { name: "iPhone", slug: "iphone", files: [{ path: rawAudioOnly, startMs: 90_000 }] },
+      ],
+    });
+    expect(result.outputs.combined).toBeNull();
+    expect(Object.keys(result.outputs.angles).length).toBe(0);
+    expect(result.errors.length).toBe(1);
+    expect(result.errors[0]).toContain("no video stream"); // readable, not an ffmpeg dump
   }, 180_000);
 
   it("two angles with the same name both survive in the combined clip", async () => {

@@ -43,7 +43,12 @@ export function slugify(name: string): string {
  * failure is recorded in `errors` while the other angles still proceed \u2014 partial success (some
  * angles ready, others failed) is a first-class outcome here, surfaced by the caller
  * (`clip-job.ts`) as `state: "ready"` with `errors` populated, as long as at least one output
- * exists.
+ * exists. This is also how a locked phone camera is handled: if none of an angle's probed files
+ * have a video stream (iOS suspends the camera while keeping the mic live), that angle is failed
+ * with a readable "no video stream" error instead of being handed to ffmpeg \u2014 the other angles
+ * still produce `combined.mp4`. If every angle lacks video, `anglePaths` ends up empty and
+ * `outputs.combined` stays `null`, so the job surfaces as an error with per-angle messages
+ * instead of an ffmpeg stderr dump.
  */
 export async function processClip(o: {
   clipDir: string;
@@ -70,11 +75,19 @@ export async function processClip(o: {
 
       const probed = [];
       let hasAudio = false;
+      let hasVideo = false;
       for (const f of angle.files) {
         const info = await probe(f.path);
         probed.push({ path: f.path, startMs: f.startMs, durationMs: info.durationSec * 1000 });
         hasAudio = hasAudio || info.hasAudio;
+        hasVideo = hasVideo || info.hasVideo;
       }
+      // A locked iOS phone suspends its camera's video track while the mic keeps recording, so
+      // the upload can be audio-only. Bail out before ffmpeg does — normalizeCutArgs's
+      // `-map 0:v:0` would otherwise fail with a cryptic "Stream map '' matches no streams"
+      // dump. Skipping here just fails this one angle (caught below like any other angle
+      // failure), so the clip still comes out fine as long as another angle has video.
+      if (!hasVideo) throw new Error("no video stream (camera locked or in background?)");
       const cut = computeCutWindow(probed, windowStartMs, t);
       if (cut.durationSec < 0.5) throw new Error("window not covered by uploaded files");
 
