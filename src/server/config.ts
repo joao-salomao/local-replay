@@ -17,7 +17,10 @@ export type Config = {
   clipDurationMaxSeconds: number;
   /** Floor for the camera's recording cycle length, seconds — see `buffer-window.ts#cycleSeconds`. */
   bufferCycleMinSeconds: number;
-  /** How multi-camera clips are combined: concatenated one after another, or side-by-side. */
+  /** Historically selected how multi-camera clips were combined (concatenated one after another,
+   * or side-by-side). Currently unused by the combine step itself: `pipeline.ts#processClip` now
+   * always produces BOTH a sequential `combined.mp4` and a side-by-side `combined-side-by-side.mp4`
+   * whenever ≥2 angles succeed, regardless of this value. Kept as a config field to avoid churn. */
   layout: Layout;
   targetHeight: number;
   targetFps: number;

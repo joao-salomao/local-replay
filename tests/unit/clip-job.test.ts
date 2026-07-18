@@ -39,7 +39,11 @@ function setup(
       onProcess?.(o.angles);
       if (!processOk) throw new Error("ffmpeg exploded");
       return {
-        outputs: { combined: "combined.mp4", angles: { a: "angle-a.mp4" } },
+        outputs: {
+          combined: "combined.mp4",
+          combinedSideBySide: null,
+          angles: { a: "angle-a.mp4" },
+        },
         cameras: [],
         errors: [],
       };

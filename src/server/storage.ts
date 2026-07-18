@@ -20,7 +20,14 @@ const log = logger("storage");
  * always written, even for a failed job).
  */
 
-export type ClipOutputs = { combined: string | null; angles: Record<string, string> };
+export type ClipOutputs = {
+  combined: string | null;
+  /** Side-by-side (simultaneous, hstack) combine of the first two angles — only ever set
+   * alongside `combined` when ≥2 angles succeed; `null` for 0 or 1 angle, or if the side-by-side
+   * ffmpeg step itself failed (best-effort: see `pipeline.ts#processClip`). */
+  combinedSideBySide: string | null;
+  angles: Record<string, string>;
+};
 export type ClipCamera = {
   name: string;
   slug: string;

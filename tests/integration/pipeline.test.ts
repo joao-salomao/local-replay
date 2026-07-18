@@ -148,7 +148,7 @@ describe("probe", () => {
 });
 
 describe("processClip", () => {
-  it("cuts across a cycle boundary, normalizes, and builds a sequential combined clip", async () => {
+  it("cuts across a cycle boundary, normalizes, and builds both a sequential and a side-by-side combined clip", async () => {
     const clipDir = mkdtempSync(join(tmpdir(), "replay-clip-"));
     mkdirSync(join(clipDir, "raw"), { recursive: true });
     const t = 100_000;
@@ -186,6 +186,16 @@ describe("processClip", () => {
     const combined = await probe(join(clipDir, "combined.mp4"));
     expect(combined.durationSec).toBeGreaterThan(18.5);
     expect(combined.durationSec).toBeLessThan(21);
+
+    // Side-by-side (hstack) combine is produced ADDITIONALLY whenever ≥2 angles succeed.
+    expect(result.outputs.combinedSideBySide).toBe("combined-side-by-side.mp4");
+    expect(existsSync(join(clipDir, "combined-side-by-side.mp4"))).toBe(true);
+    const sideBySide = await probe(join(clipDir, "combined-side-by-side.mp4"));
+    expect(sideBySide.width).toBe(1920); // round(targetHeight(1080) * 16/9), same as combined
+    // Simultaneous, not summed: ~1x a single angle's duration (same bounds as `fundo` above),
+    // in contrast to the sequential `combined.mp4`'s ~2x duration asserted just above.
+    expect(sideBySide.durationSec).toBeGreaterThan(9);
+    expect(sideBySide.durationSec).toBeLessThan(10.5);
   }, 180_000);
 
   it("processes an angle whose raw files are cwd-relative paths (matches a relative DATA_DIR in prod)", async () => {
@@ -254,7 +264,7 @@ describe("processClip", () => {
     }
   }, 180_000);
 
-  it("side-by-side layout stacks the first two angles", async () => {
+  it("config.layout no longer selects which combined outputs are produced (both always produced for ≥2 angles)", async () => {
     const clipDir = mkdtempSync(join(tmpdir(), "replay-clip-"));
     mkdirSync(join(clipDir, "raw"), { recursive: true });
     const result = await processClip({
@@ -267,10 +277,18 @@ describe("processClip", () => {
         { name: "B", slug: "b", files: [{ path: rawB0, startMs: 90_000 }] },
       ],
     });
+    expect(result.errors).toEqual([]);
+    // combined.mp4 is always the SEQUENTIAL concat now, regardless of config.layout's value.
     expect(result.outputs.combined).toBe("combined.mp4");
+    expect(result.outputs.combinedSideBySide).toBe("combined-side-by-side.mp4");
+
+    const single = await probe(join(clipDir, "angle-a.mp4"));
     const combined = await probe(join(clipDir, "combined.mp4"));
+    const sideBySide = await probe(join(clipDir, "combined-side-by-side.mp4"));
     expect(combined.width).toBe(1920);
-    expect(combined.durationSec).toBeLessThan(6.5);
+    expect(combined.durationSec).toBeGreaterThan(single.durationSec * 1.7); // sequential: ~2x
+    expect(sideBySide.width).toBe(1920);
+    expect(sideBySide.durationSec).toBeLessThan(single.durationSec * 1.3); // simultaneous: ~1x
   }, 180_000);
 
   it("keeps valid angles when one angle's file is corrupt", async () => {
@@ -291,6 +309,7 @@ describe("processClip", () => {
     expect(Object.keys(result.outputs.angles)).toEqual(["ok"]);
     expect(result.errors.length).toBe(1);
     expect(result.outputs.combined).toBe("combined.mp4"); // single valid angle copied
+    expect(result.outputs.combinedSideBySide).toBeNull(); // only 1 angle: no side-by-side
   }, 180_000);
 
   it("locked camera angle is skipped, clip still produced from the other angle", async () => {
@@ -405,6 +424,7 @@ describe("processClip", () => {
       ],
     });
     expect(result.outputs.combined).toBeNull();
+    expect(result.outputs.combinedSideBySide).toBeNull(); // 0 angles: neither combined output
     expect(Object.keys(result.outputs.angles).length).toBe(0);
     expect(result.errors.length).toBe(1);
     expect(result.errors[0]).toContain("no video stream"); // readable, not an ffmpeg dump

@@ -11,7 +11,11 @@ type ClipEntry = {
   createdAt: number;
   state: "processing" | "ready" | "error";
   cameras: { name: string; slug: string }[];
-  outputs: { combined: string | null; angles: Record<string, string> };
+  outputs: {
+    combined: string | null;
+    combinedSideBySide: string | null;
+    angles: Record<string, string>;
+  };
   errors: string[];
   dir: string;
 };
@@ -32,10 +36,14 @@ function card(clip: ClipEntry): string {
   const src = clip.outputs.combined ?? Object.values(clip.outputs.angles)[0];
   if (!src) return "";
   const video = `/files/${clip.dir}/${src}`;
+  const sideBySide = clip.outputs.combinedSideBySide
+    ? `/files/${clip.dir}/${clip.outputs.combinedSideBySide}`
+    : null;
   const downloads = [
     clip.outputs.combined
       ? `<a class="dl" href="/files/${clip.dir}/${clip.outputs.combined}" download>⬇️ Combinado</a>`
       : "",
+    sideBySide ? `<a class="dl" href="${sideBySide}" download>⬇️ Lado a lado</a>` : "",
     ...Object.entries(clip.outputs.angles).map(
       ([slug, file]) =>
         `<a class="dl" href="/files/${clip.dir}/${file}" download>⬇️ ${esc(nameBySlug.get(slug) ?? slug)}</a>`,
@@ -43,9 +51,15 @@ function card(clip: ClipEntry): string {
   ].join("");
   const partial =
     clip.errors.length > 0 ? ' <span class="muted">(processado parcialmente)</span>' : "";
+  // The side-by-side player is additional, rendered below the main (sequential-or-single-angle)
+  // player — it's never the `src` picked above, only ever an extra view when it exists.
+  const sideBySidePlayer = sideBySide
+    ? `<p class="muted">Lado a lado (simultâneo)</p><video controls preload="metadata" src="${sideBySide}"></video>`
+    : "";
   return `<div class="card clip-card">
     <p><strong>Lance #${clip.clipNumber}</strong> — ${time(clip.createdAt)}${partial}</p>
     <video controls preload="metadata" src="${video}"></video>
+    ${sideBySidePlayer}
     <p>${downloads}</p>
     <button class="share-btn" data-file="${video}" data-name="lance-${String(clip.clipNumber).padStart(3, "0")}.mp4">📤 Compartilhar</button>
     <img alt="QR" style="width:96px;background:#fff;border-radius:6px;margin-top:8px" src="/api/qr.svg?data=${encodeURIComponent(location.origin + video)}" />
@@ -104,6 +118,7 @@ async function load(): Promise<void> {
       c.clipNumber,
       c.state,
       c.outputs.combined,
+      c.outputs.combinedSideBySide,
       Object.keys(c.outputs.angles).length,
     ]),
   );

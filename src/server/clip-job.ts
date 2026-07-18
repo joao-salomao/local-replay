@@ -203,7 +203,7 @@ export class JobManager {
       layout: this.deps.config.value.layout,
       state: "error",
       cameras: [],
-      outputs: { combined: null, angles: {} },
+      outputs: { combined: null, combinedSideBySide: null, angles: {} },
       errors: [],
       createdAt: job.status.createdAt,
     };

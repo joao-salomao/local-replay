@@ -14,7 +14,7 @@ const meta = (over: Partial<ClipMeta>): ClipMeta => ({
   layout: "sequential",
   state: "ready",
   cameras: [],
-  outputs: { combined: "combined.mp4", angles: {} },
+  outputs: { combined: "combined.mp4", combinedSideBySide: null, angles: {} },
   errors: [],
   createdAt: 0,
   ...over,

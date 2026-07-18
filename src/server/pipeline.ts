@@ -36,8 +36,10 @@ export function slugify(name: string): string {
 /**
  * Orchestrates turning a job's raw per-camera uploads into the final clip outputs: for each
  * angle, probe \u2192 compute the cut window \u2192 normalize (cut+scale+encode) \u2192 collect; then combine
- * all successful angles into `combined.mp4` (copy-through for one angle, side-by-side or
- * sequential concat for two or more, per `config.layout`).
+ * all successful angles: a single angle is copy-through'd to `combined.mp4`; two or more angles
+ * produce BOTH a sequential concat (`combined.mp4`, the primary/main output) AND a side-by-side
+ * hstack of the first two angles (`combined-side-by-side.mp4`) \u2014 `config.layout` no longer
+ * selects between them, it's kept only as a persisted config field (see `config.ts#Layout`).
  *
  * One angle's failure does not abort the clip: each angle runs in its own try/catch, and a
  * failure is recorded in `errors` while the other angles still proceed \u2014 partial success (some
@@ -62,7 +64,7 @@ export async function processClip(o: {
   const { clipDir, t, windowSec, config } = o;
   const width = Math.round((config.targetHeight * 16) / 9);
   const windowStartMs = t - windowSec * 1000;
-  const outputs: ClipOutputs = { combined: null, angles: {} };
+  const outputs: ClipOutputs = { combined: null, combinedSideBySide: null, angles: {} };
   const cameras: ClipCamera[] = [];
   const errors: string[] = [];
   const anglePaths: string[] = [];
@@ -148,25 +150,38 @@ export async function processClip(o: {
     copyFileSync(anglePaths[0]!, join(clipDir, "combined.mp4"));
     outputs.combined = "combined.mp4";
   } else if (anglePaths.length >= 2) {
+    // Both combined outputs are produced whenever ≥2 angles succeed — `config.layout` is no
+    // longer branched on here (see the docstring above and `config.ts#Layout`).
     const out = join(clipDir, "combined.mp4");
-    log.info("combine start", { angles: anglePaths.length, layout: config.layout });
-    if (config.layout === "side-by-side") {
-      const combineArgs = combineSideBySideArgs(
-        [anglePaths[0]!, anglePaths[1]!],
-        { width, height: config.targetHeight, fps: config.targetFps },
-        out,
-      );
-      log.debug("ffmpeg cmd", { cmd: combineArgs.join(" ") });
-      await runFfmpeg(combineArgs);
-    } else {
-      const listFile = join(clipDir, "raw", "combined-list.txt");
-      writeConcatList(anglePaths, listFile);
-      const combineArgs = combineSequentialArgs(listFile, out);
-      log.debug("ffmpeg cmd", { cmd: combineArgs.join(" ") });
-      await runFfmpeg(combineArgs);
-    }
+    log.info("combine start", { angles: anglePaths.length });
+    const listFile = join(clipDir, "raw", "combined-list.txt");
+    writeConcatList(anglePaths, listFile);
+    const sequentialArgs = combineSequentialArgs(listFile, out);
+    log.debug("ffmpeg cmd", { cmd: sequentialArgs.join(" ") });
+    await runFfmpeg(sequentialArgs);
     outputs.combined = "combined.mp4";
     log.info("combine done", { output: out });
+
+    // The side-by-side combine is best-effort: unlike the sequential combine above (whose
+    // failure aborts the whole clip, matching prior behavior), a failure here is recorded as an
+    // error but must not take down the sequential combined output + angles that already
+    // succeeded — mirrors the per-angle resilience elsewhere in this function.
+    try {
+      const sideBySideOut = join(clipDir, "combined-side-by-side.mp4");
+      const sideBySideArgs = combineSideBySideArgs(
+        [anglePaths[0]!, anglePaths[1]!],
+        { width, height: config.targetHeight, fps: config.targetFps },
+        sideBySideOut,
+      );
+      log.debug("ffmpeg cmd", { cmd: sideBySideArgs.join(" ") });
+      await runFfmpeg(sideBySideArgs);
+      outputs.combinedSideBySide = "combined-side-by-side.mp4";
+      log.info("combine side-by-side done", { output: sideBySideOut });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      log.warn("side-by-side combine failed", { error: message });
+      errors.push(`side-by-side combine: ${message}`);
+    }
   }
 
   return { outputs, cameras, errors };
