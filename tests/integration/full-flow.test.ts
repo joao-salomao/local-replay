@@ -21,7 +21,16 @@ beforeAll(async () => {
   app = await createAppForTest(
     dataDir,
     { cooldownMs: 0 },
-    { env: { PASSWORD: "senha", SESSION_SECRET: "s", CLIP_DURATION_SECONDS: "10" } },
+    {
+      env: {
+        PASSWORD: "senha",
+        SESSION_SECRET: "s",
+        CLIP_DURATION_SECONDS: "10",
+        // small target: keeps the real-ffmpeg full flow fast (see pipeline.test.ts's config)
+        TARGET_HEIGHT: "180",
+        TARGET_FPS: "15",
+      },
+    },
   );
   rawDir = mkdtempSync(join(tmpdir(), "replay-flow-raw-"));
   raw = join(rawDir, "raw.mp4");
@@ -96,8 +105,8 @@ describe("full flow", () => {
 
     const filePath = join(app.ctx.dataDir, clips[0]!.dir, "combined.mp4");
     const info = await probe(filePath);
-    expect(info.width).toBe(1920);
-    expect(info.height).toBe(1080);
+    expect(info.width).toBe(320); // round(180 * 16/9), from the small test TARGET_HEIGHT
+    expect(info.height).toBe(180);
     expect(info.durationSec).toBeGreaterThan(17); // 2 angles × ~10s sequential
     expect(info.durationSec).toBeLessThan(22);
 

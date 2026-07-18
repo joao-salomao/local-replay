@@ -8,7 +8,17 @@ import { processClip } from "@server/pipeline";
 
 setDefaultTimeout(180_000);
 
-const config: Config = { password: "x", sessionSecret: "x", ...DEFAULT_CONFIG };
+const config: Config = {
+  password: "x",
+  sessionSecret: "x",
+  ...DEFAULT_CONFIG,
+  // Small target keeps these real-ffmpeg tests fast — they verify pipeline LOGIC (cut windows,
+  // combining, audio mapping, error handling), not encode quality or resolution.
+  targetHeight: 180,
+  targetFps: 15,
+};
+// The combine step derives the output width from the config: round(targetHeight * 16/9).
+const OUT_WIDTH = Math.round((config.targetHeight * 16) / 9);
 let rawA0: string, rawA1: string, rawB0: string, rawAudioOnly: string, rawGappedCorrupt: string;
 
 async function synth(path: string, seconds: number): Promise<void> {
@@ -176,9 +186,9 @@ describe("processClip", () => {
     expect(result.outputs.combined).toBe("combined.mp4");
 
     const fundo = await probe(join(clipDir, "angle-fundo.mp4"));
-    expect(fundo.width).toBe(1920);
-    expect(fundo.height).toBe(1080);
-    expect(Math.round(fundo.fps)).toBe(60);
+    expect(fundo.width).toBe(OUT_WIDTH);
+    expect(fundo.height).toBe(config.targetHeight);
+    expect(Math.round(fundo.fps)).toBe(config.targetFps);
     expect(fundo.hasAudio).toBe(true); // silent track injected
     expect(fundo.durationSec).toBeGreaterThan(9);
     expect(fundo.durationSec).toBeLessThan(10.5);
@@ -191,7 +201,7 @@ describe("processClip", () => {
     expect(result.outputs.combinedSideBySide).toBe("combined-side-by-side.mp4");
     expect(existsSync(join(clipDir, "combined-side-by-side.mp4"))).toBe(true);
     const sideBySide = await probe(join(clipDir, "combined-side-by-side.mp4"));
-    expect(sideBySide.width).toBe(1920); // round(targetHeight(1080) * 16/9), same as combined
+    expect(sideBySide.width).toBe(OUT_WIDTH); // derived from targetHeight, same as combined
     // Simultaneous, not summed: ~1x a single angle's duration (same bounds as `fundo` above),
     // in contrast to the sequential `combined.mp4`'s ~2x duration asserted just above.
     expect(sideBySide.durationSec).toBeGreaterThan(9);
@@ -225,8 +235,8 @@ describe("processClip", () => {
 
     const single = await probe(join(clipDir, "angle-a.mp4"));
     const sideBySide = await probe(join(clipDir, "combined-side-by-side.mp4"));
-    expect(sideBySide.width).toBe(1920);
-    expect(sideBySide.height).toBe(1080);
+    expect(sideBySide.width).toBe(OUT_WIDTH);
+    expect(sideBySide.height).toBe(config.targetHeight);
     // Simultaneous grid: ~1x a single angle (all three play at once), NOT ~3x (which would mean it
     // fell back to concatenating them one after another).
     expect(sideBySide.durationSec).toBeLessThan(single.durationSec * 1.3);
@@ -319,9 +329,9 @@ describe("processClip", () => {
     const single = await probe(join(clipDir, "angle-a.mp4"));
     const combined = await probe(join(clipDir, "combined.mp4"));
     const sideBySide = await probe(join(clipDir, "combined-side-by-side.mp4"));
-    expect(combined.width).toBe(1920);
+    expect(combined.width).toBe(OUT_WIDTH);
     expect(combined.durationSec).toBeGreaterThan(single.durationSec * 1.7); // sequential: ~2x
-    expect(sideBySide.width).toBe(1920);
+    expect(sideBySide.width).toBe(OUT_WIDTH);
     expect(sideBySide.durationSec).toBeLessThan(single.durationSec * 1.3); // simultaneous: ~1x
   }, 180_000);
 
