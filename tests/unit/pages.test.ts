@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { buildPages } from "../../src/server/pages";
+import { buildPages } from "@server/pages";
 
 describe("buildPages", () => {
   it("bundles the four page entrypoints and serves html + whitelisted assets", async () => {

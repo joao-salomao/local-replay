@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { esc } from "../../src/web/shared/esc";
+import { esc } from "@web/shared/esc";
 
 describe("esc", () => {
   it("neutralizes an HTML/JS injection payload", () => {

@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ConfigStore, DEFAULT_CONFIG } from "../../src/server/config";
+import { ConfigStore, DEFAULT_CONFIG } from "@server/config";
 
 const tmp = () => mkdtempSync(join(tmpdir(), "replay-config-"));
 

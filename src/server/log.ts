@@ -1,4 +1,4 @@
-import type { LogEntry } from "../shared/protocol";
+import type { LogEntry } from "@shared/protocol";
 
 // Tiny leveled logger, no runtime dependencies (the only import above is type-only, erased at
 // compile time).

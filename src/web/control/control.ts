@@ -1,7 +1,7 @@
-import type { CameraInfo, JobStatus, LogEntry, ServerMessage } from "../../shared/protocol";
-import { api } from "../shared/api";
-import { esc } from "../shared/esc";
-import { WsClient } from "../shared/ws-client";
+import type { CameraInfo, JobStatus, LogEntry, ServerMessage } from "@shared/protocol";
+import { api } from "@web/shared/api";
+import { esc } from "@web/shared/esc";
+import { WsClient } from "@web/shared/ws-client";
 
 /**
  * Control/remote page: shows connected cameras and recent job statuses over a live WS connection,

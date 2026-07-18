@@ -2,9 +2,9 @@ import { beforeAll, describe, expect, it, setDefaultTimeout } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
-import { DEFAULT_CONFIG, type Config } from "../../src/server/config";
-import { probe, runFfmpeg } from "../../src/server/ffmpeg";
-import { processClip } from "../../src/server/pipeline";
+import { DEFAULT_CONFIG, type Config } from "@server/config";
+import { probe, runFfmpeg } from "@server/ffmpeg";
+import { processClip } from "@server/pipeline";
 
 setDefaultTimeout(180_000);
 

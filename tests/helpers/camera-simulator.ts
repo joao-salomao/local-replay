@@ -1,4 +1,4 @@
-import type { ServerMessage } from "../../src/shared/protocol";
+import type { ServerMessage } from "@shared/protocol";
 
 export class CameraSimulator {
   uploads = 0;

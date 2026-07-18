@@ -11,7 +11,7 @@ import { logger } from "./log";
 import type { PageAssets, PageName } from "./pages";
 import { slugify } from "./pipeline";
 import type { Storage } from "./storage";
-import type { LogEntry } from "../shared/protocol";
+import type { LogEntry } from "@shared/protocol";
 
 const log = logger("http");
 

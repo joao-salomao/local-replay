@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { mkdtempSync, readFileSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ensureCert } from "../../src/server/cert";
+import { ensureCert } from "@server/cert";
 
 describe("ensureCert", () => {
   it("generates cert+key once and reuses them after", async () => {

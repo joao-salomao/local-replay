@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Storage, type ClipMeta } from "../../src/server/storage";
+import { Storage, type ClipMeta } from "@server/storage";
 
 const tmp = () => mkdtempSync(join(tmpdir(), "replay-storage-"));
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
-import { LogBuffer } from "../../src/server/log-buffer";
-import type { LogEntry } from "../../src/shared/protocol";
+import { LogBuffer } from "@server/log-buffer";
+import type { LogEntry } from "@shared/protocol";
 
 function entry(seq: number): LogEntry {
   return { seq, ts: new Date(seq).toISOString(), level: "info", scope: "t", message: `m${seq}` };

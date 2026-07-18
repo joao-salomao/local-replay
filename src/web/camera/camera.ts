@@ -1,6 +1,6 @@
-import { cycleSeconds, selectFilesForWindow } from "../../shared/buffer-window";
-import type { ServerMessage } from "../../shared/protocol";
-import { WsClient } from "../shared/ws-client";
+import { cycleSeconds, selectFilesForWindow } from "@shared/buffer-window";
+import type { ServerMessage } from "@shared/protocol";
+import { WsClient } from "@web/shared/ws-client";
 
 /**
  * Camera page: continuously records in fixed-length cycles, keeping only the last two finished

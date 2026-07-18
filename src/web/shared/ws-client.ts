@@ -1,5 +1,5 @@
-import { computeOffset, type NtpSample } from "../../shared/clock";
-import type { ClientMessage, ServerMessage } from "../../shared/protocol";
+import { computeOffset, type NtpSample } from "@shared/clock";
+import type { ClientMessage, ServerMessage } from "@shared/protocol";
 
 /**
  * Shared WebSocket client for the camera and control pages: auto-reconnecting `/ws` connection,

@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Auth, RateLimiter, SESSION_TTL_MS, tokenFromCookie } from "../../src/server/auth";
+import { Auth, RateLimiter, SESSION_TTL_MS, tokenFromCookie } from "@server/auth";
 
 const tmp = () => mkdtempSync(join(tmpdir(), "replay-auth-"));
 

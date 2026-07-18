@@ -2,8 +2,8 @@ import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { logger } from "../../src/server/log";
-import type { LogEntry, ServerMessage } from "../../src/shared/protocol";
+import { logger } from "@server/log";
+import type { LogEntry, ServerMessage } from "@shared/protocol";
 import { createAppForTest } from "./test-app";
 
 /**

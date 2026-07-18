@@ -12,7 +12,7 @@ import { buildPages } from "./pages";
 import { SerialQueue } from "./queue";
 import { createApp, type AppContext } from "./routes";
 import { Storage } from "./storage";
-import type { LogEntry, ServerMessage } from "../shared/protocol";
+import type { LogEntry, ServerMessage } from "@shared/protocol";
 
 const log = logger("server");
 

@@ -1,4 +1,4 @@
-import type { LogEntry } from "../shared/protocol";
+import type { LogEntry } from "@shared/protocol";
 
 /**
  * Bounded ring buffer of the most recent log entries, so a control page that connects (or

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { computeOffset } from "../../src/shared/clock";
+import { computeOffset } from "@shared/clock";
 
 describe("computeOffset", () => {
   it("returns 0 for a symmetric sample with equal clocks", () => {

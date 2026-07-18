@@ -1,6 +1,6 @@
 import type { ServerWebSocket } from "bun";
 import { logger } from "./log";
-import type { CameraInfo, ClientMessage, ServerMessage } from "../shared/protocol";
+import type { CameraInfo, ClientMessage, ServerMessage } from "@shared/protocol";
 
 /**
  * Central WebSocket connection and camera-registry manager: dispatches `ClientMessage`s, tracks

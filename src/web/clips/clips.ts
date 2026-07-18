@@ -1,5 +1,5 @@
-import { api } from "../shared/api";
-import { esc } from "../shared/esc";
+import { api } from "@web/shared/api";
+import { esc } from "@web/shared/esc";
 
 /**
  * Clips gallery page: polls `/api/clips` + `/api/state` every 10s and renders a card per

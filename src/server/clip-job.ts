@@ -1,4 +1,4 @@
-import type { JobStatus } from "../shared/protocol";
+import type { JobStatus } from "@shared/protocol";
 import type { ConfigStore } from "./config";
 import type { Hub } from "./hub";
 import { logger } from "./log";

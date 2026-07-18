@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { SerialQueue } from "../../src/server/queue";
+import { SerialQueue } from "@server/queue";
 
 describe("SerialQueue", () => {
   it("runs tasks strictly in order", async () => {

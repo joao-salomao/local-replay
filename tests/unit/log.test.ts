@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { addLogSink, logger } from "../../src/server/log";
-import type { LogEntry } from "../../src/shared/protocol";
+import { addLogSink, logger } from "@server/log";
+import type { LogEntry } from "@shared/protocol";
 
 let originalLog: typeof console.log;
 let originalError: typeof console.error;

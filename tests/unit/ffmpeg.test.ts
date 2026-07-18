@@ -7,7 +7,7 @@ import {
   combineSideBySideArgs,
   normalizeCutArgs,
   writeConcatList,
-} from "../../src/server/ffmpeg";
+} from "@server/ffmpeg";
 
 describe("writeConcatList", () => {
   it("writes one quoted line per file, escaping single quotes", () => {

@@ -1,17 +1,17 @@
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Auth, RateLimiter } from "../../src/server/auth";
-import { JobManager } from "../../src/server/clip-job";
-import { ConfigStore } from "../../src/server/config";
-import { Hub, TOPIC_ALL, TOPIC_CAMERAS, TOPIC_CONTROLS } from "../../src/server/hub";
-import { addLogSink } from "../../src/server/log";
-import { LogBuffer } from "../../src/server/log-buffer";
-import { buildPages } from "../../src/server/pages";
-import { SerialQueue } from "../../src/server/queue";
-import { createApp, type AppContext } from "../../src/server/routes";
-import { Storage } from "../../src/server/storage";
-import type { LogEntry, ServerMessage } from "../../src/shared/protocol";
+import { Auth, RateLimiter } from "@server/auth";
+import { JobManager } from "@server/clip-job";
+import { ConfigStore } from "@server/config";
+import { Hub, TOPIC_ALL, TOPIC_CAMERAS, TOPIC_CONTROLS } from "@server/hub";
+import { addLogSink } from "@server/log";
+import { LogBuffer } from "@server/log-buffer";
+import { buildPages } from "@server/pages";
+import { SerialQueue } from "@server/queue";
+import { createApp, type AppContext } from "@server/routes";
+import { Storage } from "@server/storage";
+import type { LogEntry, ServerMessage } from "@shared/protocol";
 
 export async function createAppForTest(
   dataDir: string,

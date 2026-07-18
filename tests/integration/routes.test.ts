@@ -2,9 +2,9 @@ import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { RateLimiter } from "../../src/server/auth";
-import type { LogBuffer } from "../../src/server/log-buffer";
-import type { LogEntry } from "../../src/shared/protocol";
+import { RateLimiter } from "@server/auth";
+import type { LogBuffer } from "@server/log-buffer";
+import type { LogEntry } from "@shared/protocol";
 import { createAppForTest } from "./test-app";
 
 let base: string;

@@ -1,9 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import {
-  computeCutWindow,
-  cycleSeconds,
-  selectFilesForWindow,
-} from "../../src/shared/buffer-window";
+import { computeCutWindow, cycleSeconds, selectFilesForWindow } from "@shared/buffer-window";
 
 describe("cycleSeconds", () => {
   it("is max(min, clipDuration)", () => {

@@ -1,6 +1,6 @@
 import { copyFileSync } from "node:fs";
 import { join } from "node:path";
-import { computeCutWindow } from "../shared/buffer-window";
+import { computeCutWindow } from "@shared/buffer-window";
 import type { Config } from "./config";
 import {
   combineSequentialArgs,
