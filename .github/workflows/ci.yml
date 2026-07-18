@@ -78,3 +78,39 @@ jobs:
           name: playwright-report
           path: playwright-report/
           retention-days: 7
+
+  docker:
+    name: Docker build + smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Builds the production image exactly as `start.sh` does. This catches
+      # container-only regressions the unit/integration suite can't — e.g. a runtime
+      # file the Dockerfile forgets to COPY (tsconfig.json, which Bun needs to resolve
+      # the @server/@shared/@web path aliases): the app boots fine in dev but fails in
+      # the image with "Cannot find module @shared/...".
+      - name: Build image
+        run: docker build -t local-replay:ci .
+
+      - name: Boot the container and smoke-test it
+        run: |
+          docker run --rm -d -p 8443:8443 -e HOST_LAN_IP=127.0.0.1 --name lr-ci local-replay:ci
+          # Wait for the server to generate its cert and start serving.
+          for _ in $(seq 1 30); do
+            if curl -fsk https://localhost:8443/ >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          echo "----- container logs -----"
+          docker logs lr-ci || true
+          echo "--------------------------"
+          ok=1
+          if ! curl -fsk https://localhost:8443/ | grep -q "Local Replay"; then
+            echo "::error::root did not serve the app"; ok=0
+          fi
+          if docker logs lr-ci 2>&1 | grep -qi "cannot find module"; then
+            echo "::error::module-resolution failure in the container (missing runtime file?)"; ok=0
+          fi
+          docker rm -f lr-ci >/dev/null 2>&1 || true
+          if [ "$ok" -ne 1 ]; then exit 1; fi
+          echo "Docker smoke test passed."
