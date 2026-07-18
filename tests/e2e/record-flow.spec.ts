@@ -27,6 +27,12 @@ test("record flow: 2 cameras + control → clip in gallery", async ({ context, p
   await control.goto("/control");
   await expect(control.locator("#cam-count")).toHaveText("2 câmera(s) online", { timeout: 15_000 });
 
+  // "10" is active from the seeded config; clicking "20" must move the active state (proves the POST + WS re-render works)
+  await expect(control.locator('#durations button[data-d="10"]')).toHaveClass(/active/);
+  await control.click('#durations button[data-d="20"]');
+  await expect(control.locator('#durations button[data-d="20"]')).toHaveClass(/active/);
+  await expect(control.locator('#durations button[data-d="10"]')).not.toHaveClass(/active/);
+  // set it back to 10s so the triggered clip uses a short window that the buffered seconds can cover
   await control.click('#durations button[data-d="10"]');
   await expect(control.locator('#durations button[data-d="10"]')).toHaveClass(/active/);
 

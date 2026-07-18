@@ -35,9 +35,9 @@ test("camera buffer survives repeated visibility churn and still produces a trig
 }) => {
   // This is the heaviest spec in the suite: camera setup + 3 rounds of visibility churn
   // (each restarting the MediaRecorder cycle) + a real ffmpeg-processed trigger. The global
-  // config timeout (300_000) is already generous; keep this at least that high so the
+  // config timeout (300_000) leaves zero headroom for this spec; bump it here so the
   // 240_000 inner wait for "pronto" below always has slack left for the rest of the flow.
-  test.setTimeout(300_000);
+  test.setTimeout(420_000);
 
   await login(page);
   const cameraPage = page;
@@ -54,6 +54,13 @@ test("camera buffer survives repeated visibility churn and still produces a trig
   for (let i = 0; i < 3; i++) {
     await setHidden(cameraPage, true);
     await setHidden(cameraPage, false);
+    if (i === 0) {
+      // #buffer-status always reads "Bufferizando..." while idle, seeded or not — it can't tell
+      // us the become-visible handler actually ran. #hidden-banner can: camera.ts only clears
+      // its `hidden` attribute inside that handler and never re-hides it, so this proves the
+      // recovery branch fired at least once.
+      await expect(cameraPage.locator("#hidden-banner")).toBeVisible({ timeout: 5_000 });
+    }
     await cameraPage.waitForTimeout(1_500);
     await expect(cameraPage.locator("#buffer-status")).toContainText("Bufferizando", {
       timeout: 15_000,
