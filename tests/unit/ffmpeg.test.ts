@@ -42,10 +42,28 @@ describe("normalizeCutArgs", () => {
     expect(args).toContain("-ss 5.000 -t 20.000");
     expect(args).toContain("scale=1920:1080:force_original_aspect_ratio=decrease");
     expect(args).toContain("pad=1920:1080:(ow-iw)/2:(oh-ih)/2");
-    expect(args).toContain("fps=60");
     expect(args).toContain("-c:v libx264 -preset veryfast -crf 23");
     expect(args).toContain("-map 0:a:0 -c:a aac -b:a 128k");
     expect(args).toContain("-movflags +faststart /out/a.mp4");
+  });
+
+  it("resamples to CFR and re-anchors the timeline to 0 after the fps filter (robust against gapped/VFR source timestamps)", () => {
+    const args = normalizeCutArgs(base).join(" ");
+    // setpts=PTS-STARTPTS must come AFTER fps=N in the filter chain: it re-anchors the CFR-resampled
+    // output to start at 0, not after scale/pad (order matters -- see normalizeCutArgs's doc comment).
+    expect(args).toContain(
+      "-vf scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2,fps=60,setpts=PTS-STARTPTS",
+    );
+    expect(args).toContain("-fps_mode cfr");
+  });
+
+  it("hard-caps the video stream to round(durationSec * fps) frames, belt-and-suspenders against a source that lies about its own duration", () => {
+    // base: durationSec=20, fps=60 -> exactly 1200 frames.
+    expect(normalizeCutArgs(base).join(" ")).toContain("-frames:v 1200");
+    // non-integer product rounds rather than truncating (9.96 * 60 = 597.6 -> 598).
+    expect(normalizeCutArgs({ ...base, durationSec: 9.96, fps: 60 }).join(" ")).toContain(
+      "-frames:v 598",
+    );
   });
 
   it("uses the concat demuxer when listFile is set", () => {

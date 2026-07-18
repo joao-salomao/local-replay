@@ -53,6 +53,24 @@ export function writeConcatList(paths: string[], listPath: string): void {
  * mapped in instead — this guarantees every normalized angle output has an audio stream, which
  * the downstream combine step relies on unconditionally (`-map 0:a:0` in
  * `combineSideBySideArgs`, and stream-identical assumptions in `combineSequentialArgs`).
+ *
+ * The video side is hardened against malformed/gapped source timelines (seen in practice from iOS
+ * buffers: a fragmented mp4 whose video track has an internal timestamp gap or a corrupted sample
+ * table, e.g. a moof/trun that overstates its sample count) with three layered defenses, since
+ * `-t` alone only bounds the OUTPUT duration when the source's own timestamps are well-behaved:
+ * 1. `fps=<N>` (already present) resamples to constant frame rate, duplicating/dropping frames
+ *    to fill source gaps rather than passing raw source pacing through.
+ * 2. `setpts=PTS-STARTPTS`, appended AFTER `fps=N`, re-anchors the filtered timeline to start at
+ *    0. Without it, a cut starting deep into a source (`-ss 33.5`) leaves output frames carrying
+ *    their original ~33.5s presentation timestamps, which downstream concat-demuxer combining
+ *    (`combineSequentialArgs`) relies on being comparable/contiguous across angles.
+ * 3. `-fps_mode cfr` makes the constant-frame-rate behavior an explicit, version-independent
+ *    guarantee (the default `auto` mode's cfr-like behavior for mp4 is an implementation detail,
+ *    not a contract) and `-frames:v` is a hard mechanical cap — exactly
+ *    `round(durationSec * fps)` video frames get written no matter what the source's timestamps
+ *    claim, so no source anomaly can inflate the output past the requested window. `-t` is kept
+ *    alongside it (redundant on a healthy source, but cheap insurance, and it's what actually
+ *    bounds the audio side).
  */
 export function normalizeCutArgs(o: NormalizeOptions): string[] {
   const args = ["-hide_banner", "-y"];
@@ -90,7 +108,11 @@ export function normalizeCutArgs(o: NormalizeOptions): string[] {
     "-pix_fmt",
     "yuv420p",
     "-vf",
-    `scale=${o.width}:${o.height}:force_original_aspect_ratio=decrease,pad=${o.width}:${o.height}:(ow-iw)/2:(oh-ih)/2,fps=${o.fps}`,
+    `scale=${o.width}:${o.height}:force_original_aspect_ratio=decrease,pad=${o.width}:${o.height}:(ow-iw)/2:(oh-ih)/2,fps=${o.fps},setpts=PTS-STARTPTS`,
+    "-fps_mode",
+    "cfr",
+    "-frames:v",
+    String(Math.round(o.durationSec * o.fps)),
     "-movflags",
     "+faststart",
     o.output,

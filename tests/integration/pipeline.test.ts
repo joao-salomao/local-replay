@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it, setDefaultTimeout } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { DEFAULT_CONFIG, type Config } from "../../src/server/config";
@@ -9,7 +9,7 @@ import { processClip } from "../../src/server/pipeline";
 setDefaultTimeout(180_000);
 
 const config: Config = { password: "x", ...DEFAULT_CONFIG };
-let rawA0: string, rawA1: string, rawB0: string, rawAudioOnly: string;
+let rawA0: string, rawA1: string, rawB0: string, rawAudioOnly: string, rawGappedCorrupt: string;
 
 async function synth(path: string, seconds: number): Promise<void> {
   await runFfmpeg([
@@ -48,17 +48,95 @@ async function synthAudioOnly(path: string, seconds: number): Promise<void> {
   ]);
 }
 
+/**
+ * Simulates the video-duration-bloat production failure: an iOS MediaRecorder buffer whose video
+ * track has a large internal timestamp gap (dense real frames, then an abrupt jump forward, then a
+ * sparse tail) AND a corrupted fragment sample table (a `moof`/`trun` box that declares more
+ * samples than are actually backed by real entries — plausible from a client-side fragmented-mp4
+ * writer that got interrupted mid-flush). Confirmed against the pre-fix `normalizeCutArgs` (via a
+ * temporary local revert while building this fixture): `probe()` reported `durationSec: 10`
+ * (matching the requested window — looks fine at a glance) while only ~60 packets (~1s) of the
+ * video track were actually real/decodable — the exact "declared duration far exceeds decodable
+ * content" pathology from the bug report, just at a smaller absolute scale than production's
+ * 62.3s-claimed/~10s-real clip. The dense zone is written at 60fps with `keyint=60` so the first
+ * fragment (60 samples) is the one whose `trun` gets corrupted.
+ */
+async function synthGappedCorrupt(path: string): Promise<void> {
+  const expr = "if(lt(N\\,480)\\,N/60\\,33.5+(N-480)/5)/TB";
+  await runFfmpeg([
+    "-hide_banner",
+    "-y",
+    "-f",
+    "lavfi",
+    "-i",
+    "testsrc2=size=640x360:rate=60:duration=12.5334",
+    "-vf",
+    `setpts=${expr}`,
+    "-fps_mode",
+    "passthrough",
+    "-c:v",
+    "libx264",
+    "-preset",
+    "medium",
+    "-pix_fmt",
+    "yuv420p",
+    "-x264-params",
+    "keyint=60:bframes=3:b-adapt=0",
+    "-movflags",
+    "+frag_keyframe+empty_moov+default_base_moof",
+    path,
+  ]);
+
+  // Binary-patch the first fragment's moof/traf/trun sample_count field: inflate it by 20 without
+  // touching its (size, composition_offset) entries array, so the demuxer reads 20 "phantom"
+  // samples out of whatever bytes happen to follow (the mdat header/payload).
+  const data = Buffer.from(readFileSync(path));
+  let trunSampleCountOffset = -1;
+  let off = 0;
+  while (off < data.length - 8) {
+    const size = data.readUInt32BE(off);
+    const boxType = data.toString("latin1", off + 4, off + 8);
+    if (size === 0 || boxType === "mdat") break;
+    if (boxType === "moof") {
+      let inner = off + 8;
+      const moofEnd = off + size;
+      while (inner < moofEnd) {
+        const innerSize = data.readUInt32BE(inner);
+        const innerType = data.toString("latin1", inner + 4, inner + 8);
+        if (innerType === "traf") {
+          let trafInner = inner + 8;
+          const trafEnd = inner + innerSize;
+          while (trafInner < trafEnd) {
+            const tSize = data.readUInt32BE(trafInner);
+            const tType = data.toString("latin1", trafInner + 4, trafInner + 8);
+            if (tType === "trun") trunSampleCountOffset = trafInner + 8 + 4;
+            trafInner += tSize;
+          }
+        }
+        inner += innerSize;
+      }
+      break; // only the first fragment needs corrupting
+    }
+    off += size;
+  }
+  if (trunSampleCountOffset < 0) throw new Error("synthGappedCorrupt: trun box not found");
+  data.writeUInt32BE(data.readUInt32BE(trunSampleCountOffset) + 20, trunSampleCountOffset);
+  writeFileSync(path, data);
+}
+
 beforeAll(async () => {
   const dir = mkdtempSync(join(tmpdir(), "replay-raw-"));
   rawA0 = join(dir, "a0.mp4");
   rawA1 = join(dir, "a1.mp4");
   rawB0 = join(dir, "b0.mp4");
   rawAudioOnly = join(dir, "audio-only.mp4");
+  rawGappedCorrupt = join(dir, "gapped-corrupt.mp4");
   await Promise.all([
     synth(rawA0, 8),
     synth(rawA1, 8),
     synth(rawB0, 12),
     synthAudioOnly(rawAudioOnly, 12),
+    synthGappedCorrupt(rawGappedCorrupt),
   ]);
 });
 
@@ -357,5 +435,77 @@ describe("processClip", () => {
     // proving both survived rather than the 2nd overwriting the 1st.
     expect(combined.durationSec).toBeGreaterThan(single.durationSec * 1.7);
     expect(combined.durationSec).toBeLessThan(single.durationSec * 2.3);
+  }, 180_000);
+
+  it("clamps a source with a corrupted/gapped internal timeline instead of bloating past the requested window (regression: video-duration-bloat bug)", async () => {
+    // Pre-fix, this exact fixture produced an angle output whose `probe()` reported
+    // `durationSec: 10` (matching the requested window, i.e. looking correct) while only ~60
+    // packets (~1s) of video were actually real -- `normalizeCutArgs`'s `-t` alone didn't stop the
+    // container from claiming a duration the source couldn't back up. The fix (CFR resample +
+    // `setpts=PTS-STARTPTS` re-anchor + a hard `-frames:v` cap) makes the declared duration track
+    // reality: it must never exceed the requested window, and must decode cleanly end to end.
+    const clipDir = mkdtempSync(join(tmpdir(), "replay-clip-"));
+    mkdirSync(join(clipDir, "raw"), { recursive: true });
+    const windowSec = 10;
+    const t = 100_000;
+    const result = await processClip({
+      clipDir,
+      t,
+      windowSec,
+      config,
+      angles: [
+        {
+          name: "iPhone",
+          slug: "iphone",
+          files: [{ path: rawGappedCorrupt, startMs: t - windowSec * 1000 }],
+        },
+      ],
+    });
+    expect(result.errors).toEqual([]);
+    expect(result.outputs.angles.iphone).toBe("angle-iphone.mp4");
+    expect(result.outputs.combined).toBe("combined.mp4");
+
+    const angleOut = join(clipDir, "angle-iphone.mp4");
+    const angle = await probe(angleOut);
+    // Core regression check: the declared duration must never bloat past the requested window,
+    // and the angle must still yield *some* usable video rather than failing outright.
+    expect(angle.durationSec).toBeGreaterThan(0);
+    expect(angle.durationSec).toBeLessThanOrEqual(windowSec + 0.5);
+
+    // Hard-cap check: the ACTUAL packet count (ground truth, not just the container's declared
+    // duration) must never exceed round(windowSec * targetFps) -- belt-and-suspenders proof that
+    // `-frames:v` mechanically bounds the output regardless of what the source's sample table claims.
+    const countProc = Bun.spawn(
+      [
+        "ffprobe",
+        "-v",
+        "error",
+        "-select_streams",
+        "v",
+        "-show_entries",
+        "packet=pts_time",
+        "-of",
+        "csv=p=0",
+        angleOut,
+      ],
+      { stdout: "pipe" },
+    );
+    const packetCount = (await new Response(countProc.stdout).text())
+      .trim()
+      .split("\n")
+      .filter(Boolean).length;
+    expect(packetCount).toBeLessThanOrEqual(Math.round(windowSec * config.targetFps));
+
+    // Decodes clean end to end: no "missing picture in access unit" / PPS-reference errors.
+    const decodeProc = Bun.spawn(["ffmpeg", "-v", "error", "-i", angleOut, "-f", "null", "-"], {
+      stdout: "ignore",
+      stderr: "pipe",
+    });
+    await decodeProc.exited;
+    expect((await new Response(decodeProc.stderr).text()).trim()).toBe("");
+
+    // The combined clip (a straight copy for a single angle) inherits the same guarantees.
+    const combined = await probe(join(clipDir, "combined.mp4"));
+    expect(combined.durationSec).toBeLessThanOrEqual(windowSec + 0.5);
   }, 180_000);
 });
