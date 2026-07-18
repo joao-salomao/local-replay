@@ -96,7 +96,8 @@ suficiente, inclusive para o WebSocket.
   ambas as plataformas.
 - 60fps é **melhor esforço do navegador** — vários aparelhos (inclusive iPhones) entregam 30fps
   mesmo pedindo 60 como ideal. A página `/camera` mostra a resolução/fps reais obtidos, atualizados
-  a cada 5s; a saída final do servidor é sempre conformada para 1080p60 independente da fonte.
+  a cada 5s; a saída final do servidor é conformada para a resolução/fps alvo (padrão 1080p60,
+  ajustável em `targetHeight`/`targetFps`) independente da fonte.
 
 ## Configuração
 
@@ -188,7 +189,7 @@ data/
 
 | Situação | Comportamento esperado |
 |---|---|
-| Câmera perde Wi-Fi / aba suspensa | Some da lista em `/control` (heartbeat de 5s); ao voltar, reconecta e reinicia o buffer sozinha |
+| Câmera perde Wi-Fi / aba suspensa | Some da lista em `/control` em ~10s (heartbeat a cada 3s, considerada offline após 10s sem sinal); ao voltar, reconecta e reinicia o buffer sozinha |
 | GRAVAR sem nenhuma câmera online | Botão fica desabilitado, com aviso |
 | Upload de uma câmera falha | 3 tentativas com backoff; o lance ainda fecha com os ângulos que chegaram dentro do timeout de 30s |
 | FFmpeg falha num ângulo | Publica os ângulos que deram certo; erro registrado em `meta.json` e no log do servidor |
