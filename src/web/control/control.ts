@@ -1,4 +1,4 @@
-import type { CameraInfo, JobStatus, ServerMessage } from "../../shared/protocol";
+import type { CameraInfo, JobStatus, LogEntry, ServerMessage } from "../../shared/protocol";
 import { api } from "../shared/api";
 import { WsClient } from "../shared/ws-client";
 
@@ -114,6 +114,9 @@ ws.onMessage = (msg: ServerMessage) => {
     state.jobs = [msg.job, ...rest].sort((a, b) => b.createdAt - a.createdAt).slice(0, 20);
     render();
   }
+  if (msg.type === "log") {
+    if (addLogEntries([msg.entry]) && $<HTMLDetailsElement>("log-section").open) renderLogs();
+  }
 };
 ws.connect();
 
@@ -122,3 +125,101 @@ ws.connect();
 state = await api<State>("/api/state");
 render();
 $<HTMLImageElement>("qr").src = `/api/qr.svg?data=${encodeURIComponent(location.origin)}`;
+
+/**
+ * Live server-log viewer (collapsible `<details id="log-section">`): entries stream in one at a
+ * time over the WS `log` message (see `ws.onMessage` above) and are merged with the `/api/logs`
+ * backlog fetched the first time the section is opened. Kept deliberately separate from `state`/
+ * `render()` above — this is an independent, append-only stream rather than a periodically
+ * replaced snapshot.
+ */
+const LOG_MAX = 500;
+const LEVEL_RANK: Record<LogEntry["level"], number> = { debug: 0, info: 1, warn: 2, error: 3 };
+
+let logEntries: LogEntry[] = [];
+const seenLogSeq = new Set<number>();
+let logBacklogLoaded = false;
+
+/** Formats one entry as an escaped HTML line. `scope`/`message`/`fields` all come from the server
+ * but ultimately carry operator-entered text (e.g. a camera's angle name lands in log fields like
+ * `{name: "..."}`) — exactly the same XSS risk as the camera list in `render()` above, so every
+ * part is run through `esc()`. Nothing here is trusted. */
+function logLineHtml(e: LogEntry): string {
+  const time = esc(e.ts.slice(11, 19)); // HH:MM:SS out of the ISO timestamp
+  const fields = e.fields
+    ? ` ${Object.entries(e.fields)
+        .map(([k, v]) => `${esc(k)}=${esc(String(v))}`)
+        .join(" ")}`
+    : "";
+  return `<div class="log-line ${esc(e.level)}">${time} ${esc(e.level.toUpperCase())} [${esc(e.scope)}] ${esc(e.message)}${fields}</div>`;
+}
+
+/**
+ * Re-renders `#log-view` from `logEntries`, filtered by `#log-level` and capped to the last 500
+ * visible lines. Auto-scrolls to the bottom only if the view was already scrolled near the bottom
+ * *before* this render — so an operator who scrolled up to read history doesn't get yanked back
+ * down by a new incoming line (the check has to happen before the `innerHTML` swap below, since
+ * that resets `scrollTop`).
+ */
+function renderLogs(): void {
+  const view = $("log-view");
+  const nearBottom = view.scrollHeight - view.scrollTop - view.clientHeight < 40;
+  const filter = $<HTMLSelectElement>("log-level").value as "all" | LogEntry["level"];
+  const threshold = filter === "all" ? -1 : LEVEL_RANK[filter];
+  const visible = logEntries.filter((e) => LEVEL_RANK[e.level] >= threshold).slice(-LOG_MAX);
+  view.innerHTML = visible.map(logLineHtml).join("");
+  if (nearBottom) view.scrollTop = view.scrollHeight;
+}
+
+/**
+ * Merges `entries` into `logEntries`, deduped by `seq` (a line can otherwise arrive twice — once
+ * live over the WS, once again via the backlog fetch), keeps them sorted by `seq`, and caps at
+ * `LOG_MAX`. Shared by both the one-at-a-time WS branch and the bulk backlog merge below. Returns
+ * whether anything was actually added, so callers can skip a pointless re-render.
+ */
+function addLogEntries(entries: LogEntry[]): boolean {
+  let added = false;
+  for (const e of entries) {
+    if (seenLogSeq.has(e.seq)) continue;
+    seenLogSeq.add(e.seq);
+    logEntries.push(e);
+    added = true;
+  }
+  if (added) {
+    logEntries.sort((a, b) => a.seq - b.seq);
+    if (logEntries.length > LOG_MAX) {
+      for (const e of logEntries.slice(0, logEntries.length - LOG_MAX)) seenLogSeq.delete(e.seq);
+      logEntries = logEntries.slice(-LOG_MAX);
+    }
+  }
+  return added;
+}
+
+// Backlog fetch happens once, the first time the section is opened (guarded by `logBacklogLoaded`)
+// — but every subsequent open re-renders from the current in-memory `logEntries` regardless, since
+// WS `log` messages that arrived while the section was collapsed were still merged into
+// `logEntries` above (see `ws.onMessage`), just not painted into the (hidden) DOM at the time.
+$<HTMLDetailsElement>("log-section").addEventListener("toggle", () => {
+  const section = $<HTMLDetailsElement>("log-section");
+  if (!section.open) return;
+  if (!logBacklogLoaded) {
+    logBacklogLoaded = true;
+    void (async () => {
+      const backlog = await api<LogEntry[]>("/api/logs");
+      addLogEntries(backlog);
+      renderLogs();
+    })();
+  } else {
+    renderLogs();
+  }
+});
+
+$("log-clear").onclick = () => {
+  // Clears only this page's view/local state — the server-side ring buffer (`/api/logs`) is left
+  // alone, so reopening a fresh control page still sees the real history.
+  logEntries = [];
+  seenLogSeq.clear();
+  $("log-view").innerHTML = "";
+};
+
+$("log-level").onchange = () => renderLogs();

@@ -17,6 +17,9 @@ export const TOPIC_ALL = "all";
 /** Pub/sub topic only camera connections join — carries `record` triggers (control clients don't
  * need them). */
 export const TOPIC_CAMERAS = "cameras";
+/** Pub/sub topic only control connections join — carries streamed `log` lines (see `log.ts`,
+ * `server/index.ts`); cameras never subscribe to it. */
+export const TOPIC_CONTROLS = "controls";
 /** No heartbeat/message from a camera within this window ⇒ considered offline (see `sweep`). */
 export const OFFLINE_AFTER_MS = 10_000;
 
@@ -76,6 +79,8 @@ export class Hub {
         ws.send(JSON.stringify(reply));
         log.info("camera registered", { id, name: msg.name });
       } else {
+        // Controls (not cameras) subscribe to TOPIC_CONTROLS, so they receive streamed log lines.
+        ws.subscribe(TOPIC_CONTROLS);
         log.debug("control registered");
       }
       this.onStateChanged();

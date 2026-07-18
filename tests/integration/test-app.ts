@@ -4,12 +4,14 @@ import { join } from "node:path";
 import { Auth, RateLimiter } from "../../src/server/auth";
 import { JobManager } from "../../src/server/clip-job";
 import { ConfigStore } from "../../src/server/config";
-import { Hub, TOPIC_ALL, TOPIC_CAMERAS } from "../../src/server/hub";
+import { Hub, TOPIC_ALL, TOPIC_CAMERAS, TOPIC_CONTROLS } from "../../src/server/hub";
+import { addLogSink } from "../../src/server/log";
+import { LogBuffer } from "../../src/server/log-buffer";
 import { buildPages } from "../../src/server/pages";
 import { SerialQueue } from "../../src/server/queue";
 import { createApp, type AppContext } from "../../src/server/routes";
 import { Storage } from "../../src/server/storage";
-import type { ServerMessage } from "../../src/shared/protocol";
+import type { LogEntry, ServerMessage } from "../../src/shared/protocol";
 
 export async function createAppForTest(
   dataDir: string,
@@ -20,6 +22,20 @@ export async function createAppForTest(
   const storage = new Storage(dataDir);
   const hub = new Hub();
   const queue = new SerialQueue();
+
+  // Mirrors server/index.ts's sink wiring (see its comments for the full rationale): `logBuffer`
+  // always gets every emitted line, `publishLog` is filled in once `server` exists below. The
+  // disposer is both exposed directly (`disposeLogSink`) and invoked from `stop()`, so every
+  // existing call site that already calls `.stop()` gets leak-free cleanup for free — this matters
+  // because the log sink registry is a module-level singleton shared across every app instance the
+  // test suite builds, and a leaked sink keeps firing (and slowing down) long after its app died.
+  const logBuffer = new LogBuffer(200);
+  let publishLog: ((entry: LogEntry) => void) | null = null;
+  const disposeLogSink = addLogSink((entry) => {
+    logBuffer.push(entry);
+    publishLog?.(entry);
+  });
+
   const ctx: AppContext = {
     dataDir,
     config,
@@ -30,6 +46,7 @@ export async function createAppForTest(
     trustProxy: opts.trustProxy ?? false,
     pages: await buildPages("src/web", mkdtempSync(join(tmpdir(), "replay-dist-"))),
     jobs: undefined as unknown as JobManager,
+    logBuffer,
   };
   ctx.jobs = new JobManager({
     storage,
@@ -52,6 +69,8 @@ export async function createAppForTest(
     fetch: app.fetch,
     websocket: app.websocket,
   });
+  publishLog = (entry) =>
+    server.publish(TOPIC_CONTROLS, JSON.stringify({ type: "log", entry } satisfies ServerMessage));
   hub.onStateChanged = () =>
     server.publish(
       TOPIC_ALL,
@@ -69,6 +88,13 @@ export async function createAppForTest(
     ws: `ws://localhost:${server.port}/ws`,
     server,
     ctx,
-    stop: () => server.stop(true),
+    disposeLogSink,
+    // Disposing the log sink here means every existing `afterAll(() => stop())` caller already
+    // avoids leaking a sink into the rest of the suite without needing to know this exists; a test
+    // that specifically exercises the sink can still call `disposeLogSink()` directly first.
+    stop: () => {
+      disposeLogSink();
+      server.stop(true);
+    },
   };
 }

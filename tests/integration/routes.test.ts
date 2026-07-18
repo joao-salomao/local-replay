@@ -3,6 +3,8 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { RateLimiter } from "../../src/server/auth";
+import type { LogBuffer } from "../../src/server/log-buffer";
+import type { LogEntry } from "../../src/shared/protocol";
 import { createAppForTest } from "./test-app";
 
 let base: string;
@@ -85,7 +87,36 @@ describe("routes", () => {
   it("requires auth on the api and on /ws", async () => {
     expect((await fetch(`${base}/api/state`)).status).toBe(401);
     expect((await fetch(`${base}/api/clips`)).status).toBe(401);
+    expect((await fetch(`${base}/api/logs`)).status).toBe(401);
     expect((await fetch(`${base}/ws`)).status).toBe(401);
+  });
+
+  it("returns the buffered log backlog", async () => {
+    const cookie = await login();
+    const before = (await (
+      await fetch(`${base}/api/logs`, { headers: { cookie } })
+    ).json()) as LogEntry[];
+
+    const pushed: LogEntry[] = [
+      { seq: 900_001, ts: new Date().toISOString(), level: "info", scope: "test", message: "a" },
+      {
+        seq: 900_002,
+        ts: new Date().toISOString(),
+        level: "warn",
+        scope: "test",
+        message: "b",
+        fields: { cam: "Fundo" },
+      },
+    ];
+    // AppContext narrows logBuffer to just `{ entries() }` (all routes.ts itself ever needs) — the
+    // test reaches for the concrete `LogBuffer.push` to seed the backlog directly and
+    // deterministically, without going through the logger/sink machinery.
+    pushed.forEach((e) => (app.ctx.logBuffer as LogBuffer).push(e));
+
+    const res = await fetch(`${base}/api/logs`, { headers: { cookie } });
+    expect(res.status).toBe(200);
+    const after = (await res.json()) as LogEntry[];
+    expect(after).toEqual([...before, ...pushed]);
   });
 
   it("serves a qr svg", async () => {

@@ -28,6 +28,19 @@
     <p class="muted">Entrar no sistema</p>
     <img id="qr" alt="QR code" style="width:100%;max-width:240px;background:#fff;border-radius:8px" />
   </div>
+  <details class="card" id="log-section">
+    <summary>Logs do servidor</summary>
+    <div class="log-controls">
+      <select id="log-level">
+        <option value="all">Todos</option>
+        <option value="info">info</option>
+        <option value="warn">warn</option>
+        <option value="error">error</option>
+      </select>
+      <button id="log-clear">Limpar</button>
+    </div>
+    <div id="log-view" class="log-view"></div>
+  </details>
   <script type="module" src="/assets/control.js"></script>
 </body>
 </html>

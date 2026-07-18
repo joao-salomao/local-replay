@@ -25,6 +25,19 @@ export type JobStatus = {
   createdAt: number;
 };
 
+/** One structured server log line, as streamed to control pages and returned by `GET /api/logs`
+ * (see `server/log.ts` for the emit→sink mechanism and `server/log-buffer.ts` for the backlog ring
+ * buffer). `seq` is a process-wide monotonic counter, used client-side to dedupe a line that
+ * arrives via both the WS stream and the `/api/logs` backlog. */
+export type LogEntry = {
+  seq: number;
+  ts: string;
+  level: "debug" | "info" | "warn" | "error";
+  scope: string;
+  message: string;
+  fields?: Record<string, string | number | boolean>;
+};
+
 /**
  * Client → server messages.
  * - `register`: first message on a new connection; declares the connection's role. Camera
@@ -50,6 +63,9 @@ export type ClientMessage =
  *   free disk. Sent on any real change, not on a fixed interval (see `hub.ts#onStateChanged`).
  * - `jobUpdate`: incremental broadcast to all connections when a single job's status changes,
  *   so clients don't need to wait for the next full `state` message to see progress.
+ * - `log`: one server log line, streamed only to control connections (`TOPIC_CONTROLS` — see
+ *   `hub.ts`/`log.ts`) as it's emitted; `GET /api/logs` covers the backlog from before a control
+ *   page connected.
  */
 export type ServerMessage =
   | { type: "registered"; cameraId: string }
@@ -63,4 +79,5 @@ export type ServerMessage =
       jobs: JobStatus[];
       freeDiskGB: number | null;
     }
-  | { type: "jobUpdate"; job: JobStatus };
+  | { type: "jobUpdate"; job: JobStatus }
+  | { type: "log"; entry: LogEntry };

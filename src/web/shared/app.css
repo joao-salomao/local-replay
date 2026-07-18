@@ -116,3 +116,49 @@ a.dl {
   margin-right: 12px;
   text-decoration: none;
 }
+summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.log-controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 10px 0 8px;
+}
+.log-controls select {
+  flex: 1;
+  width: auto;
+  padding: 8px;
+}
+.log-controls button {
+  flex: 0 0 auto;
+  width: auto;
+  padding: 8px 16px;
+  font-size: 0.9rem;
+}
+.log-view {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  max-height: 240px;
+  overflow-y: auto;
+  background: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  padding: 8px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.log-line.debug {
+  color: #8b949e;
+}
+.log-line.info {
+  color: #e6edf3;
+}
+.log-line.warn {
+  color: #d29922;
+}
+.log-line.error {
+  color: #ff7b72;
+}

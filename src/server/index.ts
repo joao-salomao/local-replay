@@ -5,13 +5,14 @@ import { Auth, RateLimiter } from "./auth";
 import { JobManager } from "./clip-job";
 import { ConfigStore } from "./config";
 import { ensureCert } from "./cert";
-import { Hub, TOPIC_ALL, TOPIC_CAMERAS, type WSData } from "./hub";
-import { logger } from "./log";
+import { Hub, TOPIC_ALL, TOPIC_CAMERAS, TOPIC_CONTROLS, type WSData } from "./hub";
+import { addLogSink, logger } from "./log";
+import { LogBuffer } from "./log-buffer";
 import { buildPages } from "./pages";
 import { SerialQueue } from "./queue";
 import { createApp, type AppContext } from "./routes";
 import { Storage } from "./storage";
-import type { ServerMessage } from "../shared/protocol";
+import type { LogEntry, ServerMessage } from "../shared/protocol";
 
 const log = logger("server");
 
@@ -36,6 +37,20 @@ const config = ConfigStore.load(dataDir);
 const storage = new Storage(dataDir);
 const hub = new Hub();
 const queue = new SerialQueue();
+
+// Log sink wiring: registered as early as possible (before `ensureCert` below, which logs during
+// boot) so nothing is missed. `logBuffer` always gets every emitted line regardless of timing;
+// `publishLog` starts out null because `server` doesn't exist yet at this point in boot — it's
+// assigned further down, right after each branch's `Bun.serve()` call. Boot-time lines emitted
+// before that (e.g. cert generation) still land in the console + ring buffer, they just aren't
+// WS-published, which is fine: no control page could possibly be connected yet at that point.
+const logBuffer = new LogBuffer(200);
+let publishLog: ((entry: LogEntry) => void) | null = null;
+addLogSink((entry) => {
+  logBuffer.push(entry);
+  publishLog?.(entry);
+});
+
 // `ctx.jobs` is patched in below, right after construction: `AppContext` (read by createApp/
 // routes.ts) needs a `jobs: JobManager`, but JobManager's own callbacks need to call
 // `server.publish` — and `server` doesn't exist until `Bun.serve()` runs further down, which
@@ -51,6 +66,7 @@ const ctx: AppContext = {
   trustProxy: behindProxy,
   pages: await buildPages("src/web", join(dataDir, "dist")),
   jobs: undefined as unknown as JobManager,
+  logBuffer,
 };
 ctx.jobs = new JobManager({
   storage,
@@ -85,6 +101,8 @@ if (behindProxy) {
     fetch: app.fetch,
     websocket: app.websocket,
   });
+  publishLog = (entry) =>
+    server.publish(TOPIC_CONTROLS, JSON.stringify({ type: "log", entry } satisfies ServerMessage));
 } else {
   // LAN mode (default): self-signed HTTPS + HTTP→HTTPS redirect, unchanged.
   const { certPath, keyPath } = await ensureCert(dataDir);
@@ -95,6 +113,8 @@ if (behindProxy) {
     fetch: app.fetch,
     websocket: app.websocket,
   });
+  publishLog = (entry) =>
+    server.publish(TOPIC_CONTROLS, JSON.stringify({ type: "log", entry } satisfies ServerMessage));
 
   // Plain-HTTP listener whose only job is bouncing to HTTPS: a LAN device that typed "http://" or
   // followed a stale bookmark/link would otherwise hit a connection error instead of being routed

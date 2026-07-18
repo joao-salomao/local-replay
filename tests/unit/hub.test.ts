@@ -112,12 +112,13 @@ describe("Hub", () => {
     expect(hub.cameras()).toEqual([]);
   });
 
-  it("control registration does not create a camera", () => {
+  it("control registration does not create a camera and subscribes to TOPIC_CONTROLS, not TOPIC_CAMERAS", () => {
     const hub = new Hub();
-    const { ws } = fakeWs();
+    const { ws, topics } = fakeWs();
     hub.open(ws);
     hub.message(ws, JSON.stringify({ type: "register", role: "control" }), 0);
     expect(hub.cameras()).toEqual([]);
     expect(ws.data.role).toBe("control");
+    expect(topics).toEqual(["all", "controls"]);
   });
 });

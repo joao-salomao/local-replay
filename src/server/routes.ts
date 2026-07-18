@@ -11,6 +11,7 @@ import { logger } from "./log";
 import type { PageAssets, PageName } from "./pages";
 import { slugify } from "./pipeline";
 import type { Storage } from "./storage";
+import type { LogEntry } from "../shared/protocol";
 
 const log = logger("http");
 
@@ -32,6 +33,9 @@ export type AppContext = {
   /** true when running behind a reverse proxy (BEHIND_PROXY) — trust X-Forwarded-For for client IP */
   trustProxy: boolean;
   pages: PageAssets;
+  /** Recent-history backlog for the control page's live log viewer — see `log-buffer.ts` and the
+   * `GET /api/logs` route below. */
+  logBuffer: { entries(): LogEntry[] };
 };
 
 const CLIP_DURATION_OPTIONS = [10, 20, 30, 45, 60];
@@ -187,6 +191,13 @@ export function createApp(ctx: AppContext) {
 
     "/api/clips": {
       GET: requireAuth(() => json(ctx.storage.listClips())),
+    },
+
+    // Backlog for the control page's live log viewer (`web/control/control.ts`) — fetched once
+    // when the viewer is first opened, then kept current over the WS `log` stream (see hub.ts's
+    // TOPIC_CONTROLS and server/index.ts's sink wiring).
+    "/api/logs": {
+      GET: requireAuth(() => json(ctx.logBuffer.entries())),
     },
 
     // Validates every field defensively before writing anything to disk; `addUpload` itself is

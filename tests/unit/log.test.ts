@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { logger } from "../../src/server/log";
+import { addLogSink, logger } from "../../src/server/log";
+import type { LogEntry } from "../../src/shared/protocol";
 
 let originalLog: typeof console.log;
 let originalError: typeof console.error;
@@ -136,5 +137,68 @@ describe("logger", () => {
 
     expect(logLines).toHaveLength(1);
     expect(logLines[0]!.endsWith("no fields here")).toBe(true);
+  });
+});
+
+describe("addLogSink", () => {
+  // Every test below registers at least one sink; disposing them here (rather than trusting each
+  // test to remember) keeps this file from leaking sinks into the rest of the suite — `sinks` is a
+  // module-level singleton shared by every test file that imports "../../src/server/log".
+  let disposers: Array<() => void>;
+
+  beforeEach(() => {
+    disposers = [];
+  });
+  afterEach(() => {
+    disposers.forEach((dispose) => dispose());
+  });
+
+  it("receives an emitted entry with a growing seq, ISO ts, level, scope, message, and fields", () => {
+    process.env.LOG_LEVEL = "info";
+    const log = logger("sinkscope");
+    const received: LogEntry[] = [];
+    disposers.push(addLogSink((e) => received.push(e)));
+
+    log.info("first", { a: 1, b: "x" });
+    log.warn("second");
+
+    expect(received).toHaveLength(2);
+    expect(received[0]).toMatchObject({
+      level: "info",
+      scope: "sinkscope",
+      message: "first",
+      fields: { a: 1, b: "x" },
+    });
+    expect(Number.isNaN(new Date(received[0]!.ts).getTime())).toBe(false);
+    expect(received[1]).toMatchObject({ level: "warn", scope: "sinkscope", message: "second" });
+    expect(received[1]!.seq).toBeGreaterThan(received[0]!.seq);
+  });
+
+  it("is not called for a line below the LOG_LEVEL threshold", () => {
+    process.env.LOG_LEVEL = "warn";
+    const log = logger("sinkscope2");
+    const received: LogEntry[] = [];
+    disposers.push(addLogSink((e) => received.push(e)));
+
+    log.info("suppressed, below threshold");
+    expect(received).toEqual([]);
+
+    log.warn("at threshold, passes");
+    expect(received).toHaveLength(1);
+    expect(received[0]!.message).toBe("at threshold, passes");
+  });
+
+  it("the disposer returned by addLogSink removes the sink so it stops receiving calls", () => {
+    process.env.LOG_LEVEL = "info";
+    const log = logger("sinkscope3");
+    const received: LogEntry[] = [];
+    const dispose = addLogSink((e) => received.push(e));
+
+    log.info("before dispose");
+    expect(received).toHaveLength(1);
+
+    dispose();
+    log.info("after dispose");
+    expect(received).toHaveLength(1); // no new calls after disposal
   });
 });
