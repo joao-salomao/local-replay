@@ -8,7 +8,6 @@ import {
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
-import type { Layout } from "./config";
 import { logger } from "./log";
 
 const log = logger("storage");
@@ -38,7 +37,6 @@ export type ClipMeta = {
   clipNumber: number;
   t: number;
   windowSec: number;
-  layout: Layout;
   state: "processing" | "ready" | "error";
   cameras: ClipCamera[];
   outputs: ClipOutputs;

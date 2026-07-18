@@ -200,7 +200,6 @@ export class JobManager {
       clipNumber: job.status.clipNumber,
       t: job.t,
       windowSec: job.windowSec,
-      layout: this.deps.config.value.layout,
       state: "error",
       cameras: [],
       outputs: { combined: null, combinedSideBySide: null, angles: {} },

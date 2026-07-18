@@ -48,8 +48,7 @@ export type ProcessClipDeps = {
  * all successful angles: a single angle is copy-through'd to `combined.mp4`; two or more angles
  * produce BOTH a sequential concat (`combined.mp4`, the primary/main output) AND a simultaneous
  * grid of ALL angles (`combined-side-by-side.mp4` \u2014 a near-square `xstack` tile; see
- * `combineSideBySideArgs`) \u2014 `config.layout` no longer selects between them, it's kept only as a
- * persisted config field (see `config.ts#Layout`).
+ * `combineSideBySideArgs`).
  *
  * One angle's failure does not abort the clip: each angle runs in its own try/catch, and a
  * failure is recorded in `errors` while the other angles still proceed \u2014 partial success (some
@@ -164,8 +163,7 @@ export async function processClip(
     copyFileSync(anglePaths[0]!, join(clipDir, "combined.mp4"));
     outputs.combined = "combined.mp4";
   } else if (anglePaths.length >= 2) {
-    // Both combined outputs are produced whenever ≥2 angles succeed — `config.layout` is no
-    // longer branched on here (see the docstring above and `config.ts#Layout`).
+    // Both combined outputs are always produced whenever ≥2 angles succeed.
     const out = join(clipDir, "combined.mp4");
     log.info("combine start", { angles: anglePaths.length });
     const listFile = join(clipDir, "raw", "combined-list.txt");

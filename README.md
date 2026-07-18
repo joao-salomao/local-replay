@@ -121,7 +121,6 @@ the selector in `/control`, without touching the file or restarting):
 | `clipDurationSeconds` | `20` | Clip duration (seconds) used for the **next** play. Also adjustable live in `/control`. |
 | `clipDurationMaxSeconds` | `60` | Ceiling accepted for `clipDurationSeconds` (the server rejects higher values). |
 | `bufferCycleMinSeconds` | `30` | Minimum duration of each camera's buffer cycle. The actual cycle used is `max(bufferCycleMinSeconds, clipDurationSeconds + 5)` — the extra 5s of slack lets the server always cut the **full** requested duration, even when a play's window straddles a recording-cycle boundary (prevents short clips, e.g. 9.6s for a requested 10s). |
-| `layout` | `"sequential"` | Legacy field — no longer selects the output. Every play now produces **both** a sequential `combined.mp4` and a simultaneous grid `combined-side-by-side.mp4`. Kept only for backward compatibility. |
 | `audioSourceName` | `null` | Display name of the camera whose audio is used in the side-by-side grid. `null` = automatic (the first angle). Also selectable live in `/control`. |
 | `targetHeight` | `1080` | Target height (px) of the normalized output. |
 | `targetFps` | `60` | Target FPS of the normalized output. |
@@ -289,7 +288,7 @@ data/
     ├── combined-side-by-side.mp4  # every angle at once, in a grid
     ├── angle-fundo.mp4     # angle name comes from the nickname given on the camera (slugified)
     ├── angle-lateral.mp4
-    └── meta.json           # T, window, cameras, layout, duration, partial errors
+    └── meta.json           # T, window, cameras, duration, partial errors
 ```
 
 ## Troubleshooting

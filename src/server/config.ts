@@ -7,8 +7,6 @@ import { join } from "node:path";
  * access password — see `ConfigStore.save` for why the file is chmod'd 0600.
  */
 
-export type Layout = "sequential" | "side-by-side";
-
 export type Config = {
   password: string;
   /** Current per-clip capture window, seconds. Changeable at runtime via the control page. */
@@ -17,11 +15,6 @@ export type Config = {
   clipDurationMaxSeconds: number;
   /** Floor for the camera's recording cycle length, seconds — see `buffer-window.ts#cycleSeconds`. */
   bufferCycleMinSeconds: number;
-  /** Historically selected how multi-camera clips were combined (concatenated one after another,
-   * or side-by-side). Currently unused by the combine step itself: `pipeline.ts#processClip` now
-   * always produces BOTH a sequential `combined.mp4` and a side-by-side `combined-side-by-side.mp4`
-   * whenever ≥2 angles succeed, regardless of this value. Kept as a config field to avoid churn. */
-  layout: Layout;
   /** Display name of the camera whose audio track the simultaneous side-by-side combine uses
    * (`pipeline.ts` maps that angle's audio; the sequential combine keeps each segment's own audio).
    * `null` = automatic: the first angle's audio (the historical default). A name that matches no
@@ -37,7 +30,6 @@ export const DEFAULT_CONFIG: Omit<Config, "password"> = {
   clipDurationSeconds: 20,
   clipDurationMaxSeconds: 60,
   bufferCycleMinSeconds: 30,
-  layout: "sequential",
   audioSourceName: null,
   targetHeight: 1080,
   targetFps: 60,

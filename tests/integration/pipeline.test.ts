@@ -298,21 +298,21 @@ describe("processClip", () => {
     }
   }, 180_000);
 
-  it("config.layout no longer selects which combined outputs are produced (both always produced for ≥2 angles)", async () => {
+  it("produces both a sequential combined.mp4 and a side-by-side combined for ≥2 angles", async () => {
     const clipDir = mkdtempSync(join(tmpdir(), "replay-clip-"));
     mkdirSync(join(clipDir, "raw"), { recursive: true });
     const result = await processClip({
       clipDir,
       t: 100_000,
       windowSec: 5,
-      config: { ...config, layout: "side-by-side" },
+      config,
       angles: [
         { name: "A", slug: "a", files: [{ path: rawB0, startMs: 90_000 }] },
         { name: "B", slug: "b", files: [{ path: rawB0, startMs: 90_000 }] },
       ],
     });
     expect(result.errors).toEqual([]);
-    // combined.mp4 is always the SEQUENTIAL concat now, regardless of config.layout's value.
+    // combined.mp4 is the SEQUENTIAL concat; the grid is the additional side-by-side output.
     expect(result.outputs.combined).toBe("combined.mp4");
     expect(result.outputs.combinedSideBySide).toBe("combined-side-by-side.mp4");
 

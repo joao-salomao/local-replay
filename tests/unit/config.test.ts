@@ -11,7 +11,6 @@ describe("ConfigStore", () => {
     const dir = tmp();
     const store = ConfigStore.load(dir);
     expect(store.value.clipDurationSeconds).toBe(20);
-    expect(store.value.layout).toBe("sequential");
     expect(store.value.retentionDays).toBeNull();
     expect(store.value.password.length).toBeGreaterThanOrEqual(6);
     const onDisk = JSON.parse(readFileSync(join(dir, "config.json"), "utf8"));
@@ -21,10 +20,10 @@ describe("ConfigStore", () => {
   it("preserves existing values and fills missing keys with defaults", () => {
     const dir = tmp();
     const first = ConfigStore.load(dir);
-    first.value.layout = "side-by-side";
+    first.value.retentionDays = 30;
     first.save();
     const second = ConfigStore.load(dir);
-    expect(second.value.layout).toBe("side-by-side");
+    expect(second.value.retentionDays).toBe(30);
     expect(second.value.targetFps).toBe(DEFAULT_CONFIG.targetFps);
   });
 
