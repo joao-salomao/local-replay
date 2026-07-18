@@ -41,14 +41,12 @@ The script detects your machine's IP on the local network, brings up `docker com
 the image the first time) and prints the entry URL in the terminal along with a **QR code**. Point
 each phone's camera at the terminal's QR code (or type the URL manually) to open the system.
 
-On the **first run**, the server automatically generates an access password and saves it to
-`data/config.json`; the password is also printed in the terminal along with the URL, right below
-the QR code. Save it — it doesn't change between restarts, it's only generated once. If you need
-to see it again later: `docker compose logs replay | grep Senha`, or open `data/config.json` and
-read the `"password"` field.
+**Before the first run**, set your access password: copy `.env.example` to `.env` and set
+`PASSWORD=` to something short and easy to type on a phone keyboard — the server won't boot without
+it. Every other setting is optional (they all have defaults); see [Configuration](#configuration).
 
 To stop: `Ctrl+C` in the terminal where `start.sh` is running, or `docker compose down` in another
-terminal. The data (config, certificate, clips) is persisted in `./data` on the host thanks to the
+terminal. The data (certificate, clips) is persisted in `./data` on the host thanks to the
 volume in `docker-compose.yml` — starting it up again with `./start.sh` doesn't lose anything.
 
 ## How to Use
@@ -112,29 +110,32 @@ warning. That's already enough, including for the WebSocket.
 
 ## Configuration
 
-Editable in `data/config.json` on the host (stop the container, edit it, start it again — the
-file is only read on startup, except for `clipDurationSeconds`, which can also be changed live via
-the selector in `/control`, without touching the file or restarting):
+All configuration is done through **environment variables** (a `.env` file, or the container's
+environment — copy `.env.example` for the full annotated list). There's no config file on disk. The
+server reads them once at startup, so changing one means editing `.env` and restarting — except
+`CLIP_DURATION_SECONDS` and `AUDIO_SOURCE_NAME`, which can also be changed **live** on `/control`
+(that live change is in-memory only and reverts to the `.env` value on the next restart).
 
-| Key | Default | Description |
-|---|---|---|
-| `clipDurationSeconds` | `20` | Clip duration (seconds) used for the **next** play. Also adjustable live in `/control`. |
-| `clipDurationMaxSeconds` | `60` | Ceiling accepted for `clipDurationSeconds` (the server rejects higher values). |
-| `bufferCycleMinSeconds` | `30` | Minimum duration of each camera's buffer cycle. The actual cycle used is `max(bufferCycleMinSeconds, clipDurationSeconds + 5)` — the extra 5s of slack lets the server always cut the **full** requested duration, even when a play's window straddles a recording-cycle boundary (prevents short clips, e.g. 9.6s for a requested 10s). |
-| `audioSourceName` | `null` | Display name of the camera whose audio is used in the side-by-side grid. `null` = automatic (the first angle). Also selectable live in `/control`. |
-| `targetHeight` | `1080` | Target height (px) of the normalized output. |
-| `targetFps` | `60` | Target FPS of the normalized output. |
-| `retentionDays` | `null` | Days to keep clips. `null` = keep everything forever. If set, cleanup runs on startup and then once a day. |
-
-The file also stores `password` (generated automatically on first boot — see
-[Getting Started](#getting-started)).
-
-**Environment variables** (already configured by `docker-compose.yml`/`start.sh`; only touch these
-if you plan to run outside Docker or change the default ports):
+**`PASSWORD` is required** — the server refuses to boot without it (there's no auto-generated
+password anymore). Everything else has a default.
 
 | Variable | Default | Description |
 |---|---|---|
-| `DATA_DIR` | `data` | Folder where `config.json`, `certs/`, and `clips/` live. |
+| `PASSWORD` | *(required)* | Shared access password players type to log in. The server won't boot if it's unset. |
+| `CLIP_DURATION_SECONDS` | `20` | Clip length (seconds) for a play. Also adjustable live in `/control` (until restart). |
+| `CLIP_DURATION_MAX_SECONDS` | `60` | Ceiling accepted for the clip duration (the server rejects higher values). |
+| `BUFFER_CYCLE_MIN_SECONDS` | `30` | Minimum duration of each camera's buffer cycle. The actual cycle used is `max(BUFFER_CYCLE_MIN_SECONDS, CLIP_DURATION_SECONDS + 5)` — the extra 5s of slack lets the server always cut the **full** requested duration even across a recording-cycle boundary (prevents short clips, e.g. 9.6s for a requested 10s). |
+| `AUDIO_SOURCE_NAME` | *(empty)* | Display name of the camera whose audio is used in the side-by-side grid. Empty = automatic (the first angle). Also selectable live in `/control`. |
+| `TARGET_HEIGHT` | `1080` | Target height (px) of the normalized output. |
+| `TARGET_FPS` | `60` | Target FPS of the normalized output. |
+| `RETENTION_DAYS` | *(empty)* | Days to keep clips. Empty = keep everything forever. If set, cleanup runs on startup and then once a day. |
+
+**Infrastructure variables** (already configured by `docker-compose.yml`/`start.sh`; only touch
+these if you plan to run outside Docker or change the default ports):
+
+| Variable | Default | Description |
+|---|---|---|
+| `DATA_DIR` | `data` | Folder where `certs/` and `clips/` live. |
 | `HTTPS_PORT` | `8443` | HTTPS port — this is the system's entry port. |
 | `HTTP_PORT` | `8080` | HTTP port; only responds with a 301 redirect to HTTPS. |
 | `HOST_LAN_IP` | *(empty)* | IP of the machine on the local network, used in the certificate (SAN) and in the URL printed on boot. `start.sh` already detects and injects this value on its own. |
@@ -278,8 +279,7 @@ Everything under `data/` (a volume mapped by `docker-compose.yml`; no database):
 
 ```
 data/
-├── config.json           # password, clip duration, audio source, target resolution/fps, retention
-├── session-secret        # key used to sign the session cookie
+├── session-secret        # key used to sign the session cookie (all config lives in .env, not here)
 ├── certs/                 # self-signed certificate (generated on first boot; regenerated if HOST_LAN_IP changes)
 │   ├── cert.pem
 │   └── key.pem

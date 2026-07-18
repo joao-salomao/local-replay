@@ -17,7 +17,6 @@ let app: Awaited<ReturnType<typeof createAppForTest>>;
 beforeAll(async () => {
   const dataDir = mkdtempSync(join(tmpdir(), "replay-routes-"));
   dataDirRef = dataDir;
-  writeFileSync(join(dataDir, "config.json"), JSON.stringify({ password: "senha-teste" }));
   app = await createAppForTest(dataDir);
   base = app.base;
   stop = app.stop;
@@ -299,7 +298,6 @@ describe("routes", () => {
     // dedicated instance: trustProxy on + a tight limiter, so the test is deterministic and
     // isolated from the shared `app` above (which uses a permissive 100/min limiter)
     const dataDir = mkdtempSync(join(tmpdir(), "replay-routes-proxy-"));
-    writeFileSync(join(dataDir, "config.json"), JSON.stringify({ password: "senha-teste" }));
     const proxyApp = await createAppForTest(
       dataDir,
       {},
@@ -332,7 +330,6 @@ describe("routes", () => {
     // mirrors the proxy test above but with the default trustProxy=false: a spoofed XFF must be
     // IGNORED and the limiter must key off the shared socket instead
     const dataDir = mkdtempSync(join(tmpdir(), "replay-routes-noproxy-"));
-    writeFileSync(join(dataDir, "config.json"), JSON.stringify({ password: "senha-teste" }));
     const noProxyApp = await createAppForTest(
       dataDir,
       {},

@@ -9,11 +9,20 @@ services:
     # Host ./data is mounted at the container's DATA_DIR, so persistence follows a DATA_DIR override too.
     volumes:
       - ./data:/app/${DATA_DIR:-data}
-    # Every variable from .env.example, each defaulting to its standard value. Put any override in a
-    # .env file next to this compose file — Compose loads it automatically.
+    # Every variable from .env.example, each defaulting to its standard value (PASSWORD is required —
+    # Compose errors out if it's unset). Put any override in a .env file next to this compose file —
+    # Compose loads it automatically.
     environment:
+      - PASSWORD=${PASSWORD:?PASSWORD is required — set it in .env (see .env.example)}
       - DATA_DIR=${DATA_DIR:-data}
       - LOG_LEVEL=${LOG_LEVEL:-info}
+      - CLIP_DURATION_SECONDS=${CLIP_DURATION_SECONDS:-20}
+      - CLIP_DURATION_MAX_SECONDS=${CLIP_DURATION_MAX_SECONDS:-60}
+      - BUFFER_CYCLE_MIN_SECONDS=${BUFFER_CYCLE_MIN_SECONDS:-30}
+      - AUDIO_SOURCE_NAME=${AUDIO_SOURCE_NAME:-}
+      - TARGET_HEIGHT=${TARGET_HEIGHT:-1080}
+      - TARGET_FPS=${TARGET_FPS:-60}
+      - RETENTION_DAYS=${RETENTION_DAYS:-}
       - HTTPS_PORT=${HTTPS_PORT:-8443}
       - HTTP_PORT=${HTTP_PORT:-8080}
       - HOST_LAN_IP=${HOST_LAN_IP:-}

@@ -24,7 +24,9 @@ const log = logger("server");
  * Env vars: DATA_DIR (persisted state root), HTTPS_PORT/HTTP_PORT (LAN mode's dual listeners),
  * BEHIND_PROXY (switches to proxy mode — plain HTTP on PORT, no self-signed cert), PUBLIC_URL
  * (the URL to print/QR-code in proxy mode, since there's no LAN IP to infer it from), HOST_LAN_IP
- * (LAN mode: the IP baked into the cert's SAN and shown in the entry URL).
+ * (LAN mode: the IP baked into the cert's SAN and shown in the entry URL). All app config (the
+ * required PASSWORD, clip duration, target resolution/fps, retention, ...) also comes from the
+ * environment — see `config.ts#ConfigStore.fromEnv` and `.env.example`.
  */
 const dataDir = process.env.DATA_DIR ?? "data";
 const httpsPort = Number(process.env.HTTPS_PORT ?? 8443);
@@ -33,7 +35,7 @@ const behindProxy = /^(1|true|yes)$/i.test(process.env.BEHIND_PROXY ?? "");
 const publicUrl = process.env.PUBLIC_URL;
 const port = Number(process.env.PORT ?? 8080);
 
-const config = ConfigStore.load(dataDir);
+const config = ConfigStore.fromEnv();
 const storage = new Storage(dataDir);
 const hub = new Hub();
 const queue = new SerialQueue();
@@ -182,6 +184,5 @@ log.info(
   behindProxy ? { mode: "proxy", port, entryUrl } : { mode: "lan", httpsPort, httpPort, entryUrl },
 );
 
-console.log(`\nLocal Replay no ar: ${entryUrl}`);
-console.log(`Senha de acesso: ${config.value.password}\n`);
+console.log(`\nLocal Replay no ar: ${entryUrl}\n`);
 console.log(await QRCode.toString(entryUrl, { type: "terminal", small: true }));

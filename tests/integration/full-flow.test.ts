@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it, setDefaultTimeout } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { probe, runFfmpeg } from "@server/ffmpeg";
@@ -18,11 +18,11 @@ const sims: CameraSimulator[] = [];
 
 beforeAll(async () => {
   dataDir = mkdtempSync(join(tmpdir(), "replay-flow-"));
-  writeFileSync(
-    join(dataDir, "config.json"),
-    JSON.stringify({ password: "senha", clipDurationSeconds: 10 }),
+  app = await createAppForTest(
+    dataDir,
+    { cooldownMs: 0 },
+    { env: { PASSWORD: "senha", CLIP_DURATION_SECONDS: "10" } },
   );
-  app = await createAppForTest(dataDir, { cooldownMs: 0 });
   rawDir = mkdtempSync(join(tmpdir(), "replay-flow-raw-"));
   raw = join(rawDir, "raw.mp4");
   await runFfmpeg([

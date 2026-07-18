@@ -16,9 +16,13 @@ import type { LogEntry, ServerMessage } from "@shared/protocol";
 export async function createAppForTest(
   dataDir: string,
   jobOverrides: { uploadTimeoutMs?: number; cooldownMs?: number } = {},
-  opts: { trustProxy?: boolean; loginLimiter?: RateLimiter } = {},
+  opts: {
+    trustProxy?: boolean;
+    loginLimiter?: RateLimiter;
+    env?: Record<string, string | undefined>;
+  } = {},
 ) {
-  const config = ConfigStore.load(dataDir);
+  const config = ConfigStore.fromEnv(opts.env ?? { PASSWORD: "senha-teste" });
   const storage = new Storage(dataDir);
   const hub = new Hub();
   const queue = new SerialQueue();

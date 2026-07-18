@@ -1,15 +1,16 @@
-import { randomBytes } from "node:crypto";
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
-
 /**
- * Persisted, mutable server configuration (`<dataDir>/config.json`), including the plaintext
- * access password — see `ConfigStore.save` for why the file is chmod'd 0600.
+ * Server configuration, sourced entirely from environment variables (see `.env.example`). Nothing
+ * is persisted to disk anymore: `PASSWORD` is required (the server refuses to boot without it),
+ * every other value falls back to a built-in default, and the two runtime-adjustable settings
+ * (`clipDurationSeconds`, `audioSourceName`) start from their env value and can still be changed
+ * live via the control page — but that change is in-memory only and resets to the env value on the
+ * next restart.
  */
 
 export type Config = {
   password: string;
-  /** Current per-clip capture window, seconds. Changeable at runtime via the control page. */
+  /** Current per-clip capture window, seconds. Initial value from `CLIP_DURATION_SECONDS`; can be
+   * changed live via the control page (in-memory only — resets to the env value on restart). */
   clipDurationSeconds: number;
   /** Upper bound accepted by `setClipDuration`. */
   clipDurationMaxSeconds: number;
@@ -17,8 +18,8 @@ export type Config = {
   bufferCycleMinSeconds: number;
   /** Display name of the camera whose audio track the simultaneous side-by-side combine uses
    * (`pipeline.ts` maps that angle's audio; the sequential combine keeps each segment's own audio).
-   * `null` = automatic: the first angle's audio (the historical default). A name that matches no
-   * angle in a given clip also falls back to the first angle. Set from the control page. */
+   * `null` = automatic: the first angle's audio. Initial value from `AUDIO_SOURCE_NAME`; can be
+   * changed live via the control page (in-memory only, like `clipDurationSeconds`). */
   audioSourceName: string | null;
   targetHeight: number;
   targetFps: number;
@@ -26,6 +27,7 @@ export type Config = {
   retentionDays: number | null;
 };
 
+/** Built-in defaults for every field except the (required) password. Also used as test fixtures. */
 export const DEFAULT_CONFIG: Omit<Config, "password"> = {
   clipDurationSeconds: 20,
   clipDurationMaxSeconds: 60,
@@ -36,65 +38,74 @@ export const DEFAULT_CONFIG: Omit<Config, "password"> = {
   retentionDays: null,
 };
 
-/**
- * Generates the default access password: 6 lowercase alphanumeric characters. `-`/`_` (the
- * base64url-specific characters) are replaced with `x` rather than re-rolled, trading a
- * negligible amount of entropy for a fixed-shape, easy-to-read-aloud-and-type string — this
- * password is meant to be spoken or typed by non-technical players on a phone keyboard.
- */
-export function randomPassword(): string {
-  return randomBytes(6).toString("base64url").replace(/[-_]/g, "x").slice(0, 6).toLowerCase();
+type Env = Record<string, string | undefined>;
+
+/** Reads an integer-ish env var, falling back to `fallback` when it's unset, blank, or not a finite
+ * number (a typo shouldn't crash the boot — only a missing PASSWORD does that, in `fromEnv`). */
+function numEnv(raw: string | undefined, fallback: number): number {
+  const trimmed = raw?.trim();
+  if (!trimmed) return fallback;
+  const n = Number(trimmed);
+  return Number.isFinite(n) ? n : fallback;
 }
 
-/** Loads, mutates, and persists `Config`. Construct only via `ConfigStore.load`. */
+/**
+ * Holds the live `Config`. The two runtime-adjustable fields (`clipDurationSeconds`,
+ * `audioSourceName`) can be mutated via the setters below; everything else is fixed at construction
+ * from the environment. Construct via `ConfigStore.fromEnv`.
+ */
 export class ConfigStore {
-  private constructor(
-    private path: string,
-    public value: Config,
-  ) {}
+  private constructor(public value: Config) {}
 
   /**
-   * Loads `<dataDir>/config.json`, creating it (with a fresh random password and defaults) if
-   * absent. On an existing file, merges the persisted values over `DEFAULT_CONFIG` so that
-   * fields added in later versions get a sane default even for old config files on disk.
+   * Builds the config from environment variables (defaulting to `process.env`; a custom map can be
+   * passed in tests). `PASSWORD` is REQUIRED: the server must never boot with no access password,
+   * so a missing/blank one throws here rather than silently leaving the system open. Every other
+   * variable falls back to `DEFAULT_CONFIG`, and an unparseable numeric falls back to its default.
    */
-  static load(dataDir: string): ConfigStore {
-    mkdirSync(dataDir, { recursive: true });
-    const path = join(dataDir, "config.json");
-    if (!existsSync(path)) {
-      const store = new ConfigStore(path, { password: randomPassword(), ...DEFAULT_CONFIG });
-      store.save();
-      return store;
+  static fromEnv(env: Env = process.env): ConfigStore {
+    const password = env.PASSWORD?.trim();
+    if (!password) {
+      throw new Error("PASSWORD is required — set it in your .env (see .env.example).");
     }
-    const raw = JSON.parse(readFileSync(path, "utf8")) as Partial<Config>;
-    return new ConfigStore(path, { password: "", ...DEFAULT_CONFIG, ...raw });
+    const retention = env.RETENTION_DAYS?.trim();
+    return new ConfigStore({
+      password,
+      clipDurationSeconds: numEnv(env.CLIP_DURATION_SECONDS, DEFAULT_CONFIG.clipDurationSeconds),
+      clipDurationMaxSeconds: numEnv(
+        env.CLIP_DURATION_MAX_SECONDS,
+        DEFAULT_CONFIG.clipDurationMaxSeconds,
+      ),
+      bufferCycleMinSeconds: numEnv(
+        env.BUFFER_CYCLE_MIN_SECONDS,
+        DEFAULT_CONFIG.bufferCycleMinSeconds,
+      ),
+      audioSourceName: env.AUDIO_SOURCE_NAME?.trim() || null,
+      targetHeight: numEnv(env.TARGET_HEIGHT, DEFAULT_CONFIG.targetHeight),
+      targetFps: numEnv(env.TARGET_FPS, DEFAULT_CONFIG.targetFps),
+      retentionDays: retention && Number.isFinite(Number(retention)) ? Number(retention) : null,
+    });
   }
 
-  /** Validates and applies a new clip duration (integer seconds, 5..clipDurationMaxSeconds), then persists. */
+  /** Applies a new clip duration (integer seconds, 5..clipDurationMaxSeconds). In-memory only —
+   * there's no config file anymore, so it resets to `CLIP_DURATION_SECONDS` on the next restart. */
   setClipDuration(seconds: number): void {
     if (!Number.isInteger(seconds) || seconds < 5 || seconds > this.value.clipDurationMaxSeconds) {
       throw new Error(`invalid clip duration: ${seconds}`);
     }
     this.value.clipDurationSeconds = seconds;
-    this.save();
   }
 
   /** Selects which camera's audio the side-by-side combine uses, by display name; `null` restores
-   * the automatic (first-angle) default. Trims the name; rejects an empty or oversized string. */
+   * the automatic (first-angle) default. In-memory only (see `setClipDuration`). Trims the name;
+   * rejects an empty or oversized string. */
   setAudioSource(name: string | null): void {
     if (name === null) {
       this.value.audioSourceName = null;
-    } else {
-      const trimmed = name.trim();
-      if (!trimmed || trimmed.length > 200) throw new Error(`invalid audio source: ${name}`);
-      this.value.audioSourceName = trimmed;
+      return;
     }
-    this.save();
-  }
-
-  /** Persists the current value. chmod 0600: config.json holds the plaintext access password. */
-  save(): void {
-    writeFileSync(this.path, JSON.stringify(this.value, null, 2));
-    chmodSync(this.path, 0o600);
+    const trimmed = name.trim();
+    if (!trimmed || trimmed.length > 200) throw new Error(`invalid audio source: ${name}`);
+    this.value.audioSourceName = trimmed;
   }
 }

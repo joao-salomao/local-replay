@@ -21,8 +21,10 @@ export class Auth {
    * Loads (or creates, on first run) the persistent HMAC secret at `<dataDir>/session-secret`,
    * chmod 0600. Persisting it — rather than generating a fresh secret per boot — matters because
    * every existing session's token was signed with it: regenerating on each restart would log
-   * every user out on every deploy/restart. `password` is a getter (not a value) so `Auth` always
-   * checks against the current `ConfigStore` password, including after a config reload.
+   * every user out on every deploy/restart. (Unlike the app config, this secret stays a file — it's
+   * an internal signing key, not user-facing config, and persisting it is what keeps sessions alive
+   * across restarts.) `password` is a getter (not a value) so `Auth` reads the current
+   * `ConfigStore` password rather than capturing it once at construction.
    */
   static load(dataDir: string, password: () => string): Auth {
     mkdirSync(dataDir, { recursive: true });

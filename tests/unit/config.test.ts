@@ -1,50 +1,72 @@
 import { describe, expect, it } from "bun:test";
-import { mkdtempSync, readFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { ConfigStore, DEFAULT_CONFIG } from "@server/config";
 
-const tmp = () => mkdtempSync(join(tmpdir(), "replay-config-"));
-
-describe("ConfigStore", () => {
-  it("creates config.json with defaults and a random password on first load", () => {
-    const dir = tmp();
-    const store = ConfigStore.load(dir);
-    expect(store.value.clipDurationSeconds).toBe(20);
-    expect(store.value.retentionDays).toBeNull();
-    expect(store.value.password.length).toBeGreaterThanOrEqual(6);
-    const onDisk = JSON.parse(readFileSync(join(dir, "config.json"), "utf8"));
-    expect(onDisk.password).toBe(store.value.password);
+describe("ConfigStore.fromEnv", () => {
+  it("throws when PASSWORD is unset or blank (the server must not boot without one)", () => {
+    expect(() => ConfigStore.fromEnv({})).toThrow();
+    expect(() => ConfigStore.fromEnv({ PASSWORD: "   " })).toThrow();
   });
 
-  it("preserves existing values and fills missing keys with defaults", () => {
-    const dir = tmp();
-    const first = ConfigStore.load(dir);
-    first.value.retentionDays = 30;
-    first.save();
-    const second = ConfigStore.load(dir);
-    expect(second.value.retentionDays).toBe(30);
-    expect(second.value.targetFps).toBe(DEFAULT_CONFIG.targetFps);
+  it("uses defaults for everything but PASSWORD when nothing else is set", () => {
+    const c = ConfigStore.fromEnv({ PASSWORD: "secret" }).value;
+    expect(c.password).toBe("secret");
+    expect(c.clipDurationSeconds).toBe(DEFAULT_CONFIG.clipDurationSeconds);
+    expect(c.clipDurationMaxSeconds).toBe(DEFAULT_CONFIG.clipDurationMaxSeconds);
+    expect(c.bufferCycleMinSeconds).toBe(DEFAULT_CONFIG.bufferCycleMinSeconds);
+    expect(c.audioSourceName).toBeNull();
+    expect(c.targetHeight).toBe(DEFAULT_CONFIG.targetHeight);
+    expect(c.targetFps).toBe(DEFAULT_CONFIG.targetFps);
+    expect(c.retentionDays).toBeNull();
   });
 
-  it("setClipDuration persists valid values and rejects invalid ones", () => {
-    const dir = tmp();
-    const store = ConfigStore.load(dir);
+  it("reads and trims overrides from the environment", () => {
+    const c = ConfigStore.fromEnv({
+      PASSWORD: "  secret  ",
+      CLIP_DURATION_SECONDS: "30",
+      CLIP_DURATION_MAX_SECONDS: "90",
+      BUFFER_CYCLE_MIN_SECONDS: "45",
+      AUDIO_SOURCE_NAME: "  Fundo  ",
+      TARGET_HEIGHT: "720",
+      TARGET_FPS: "30",
+      RETENTION_DAYS: "14",
+    }).value;
+    expect(c.password).toBe("secret");
+    expect(c.clipDurationSeconds).toBe(30);
+    expect(c.clipDurationMaxSeconds).toBe(90);
+    expect(c.bufferCycleMinSeconds).toBe(45);
+    expect(c.audioSourceName).toBe("Fundo");
+    expect(c.targetHeight).toBe(720);
+    expect(c.targetFps).toBe(30);
+    expect(c.retentionDays).toBe(14);
+  });
+
+  it("falls back to defaults on unparseable numerics and treats a blank AUDIO_SOURCE_NAME as null", () => {
+    const c = ConfigStore.fromEnv({
+      PASSWORD: "secret",
+      CLIP_DURATION_SECONDS: "abc", // invalid -> default
+      AUDIO_SOURCE_NAME: "   ", // blank -> null (automatic)
+      RETENTION_DAYS: "not-a-number", // invalid -> null (keep forever)
+    }).value;
+    expect(c.clipDurationSeconds).toBe(DEFAULT_CONFIG.clipDurationSeconds);
+    expect(c.audioSourceName).toBeNull();
+    expect(c.retentionDays).toBeNull();
+  });
+
+  it("setClipDuration mutates in memory and validates (no persistence)", () => {
+    const store = ConfigStore.fromEnv({ PASSWORD: "x" });
     store.setClipDuration(45);
-    expect(ConfigStore.load(dir).value.clipDurationSeconds).toBe(45);
-    expect(() => store.setClipDuration(61)).toThrow();
-    expect(() => store.setClipDuration(4)).toThrow();
-    expect(() => store.setClipDuration(20.5)).toThrow();
+    expect(store.value.clipDurationSeconds).toBe(45);
+    expect(() => store.setClipDuration(61)).toThrow(); // > max (60)
+    expect(() => store.setClipDuration(4)).toThrow(); // < 5
+    expect(() => store.setClipDuration(20.5)).toThrow(); // not an integer
   });
 
-  it("setAudioSource persists a trimmed name or null and rejects empty/oversized", () => {
-    const dir = tmp();
-    const store = ConfigStore.load(dir);
-    expect(store.value.audioSourceName).toBeNull(); // default: automatic (first angle)
-    store.setAudioSource("  Fundo  ");
-    expect(ConfigStore.load(dir).value.audioSourceName).toBe("Fundo"); // trimmed + persisted
+  it("setAudioSource mutates in memory, trims, and rejects empty/oversized", () => {
+    const store = ConfigStore.fromEnv({ PASSWORD: "x" });
+    store.setAudioSource("  Lateral  ");
+    expect(store.value.audioSourceName).toBe("Lateral");
     store.setAudioSource(null);
-    expect(ConfigStore.load(dir).value.audioSourceName).toBeNull();
+    expect(store.value.audioSourceName).toBeNull();
     expect(() => store.setAudioSource("   ")).toThrow(); // empty after trim
     expect(() => store.setAudioSource("x".repeat(201))).toThrow(); // oversized
   });

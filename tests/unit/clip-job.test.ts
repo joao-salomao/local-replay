@@ -27,7 +27,7 @@ function setup(
   }
   const manager = new JobManager({
     storage,
-    config: ConfigStore.load(dir),
+    config: ConfigStore.fromEnv({ PASSWORD: "x" }),
     hub: { onlineCameraIds: () => cameraIds },
     queue: new SerialQueue(),
     publishRecord: (jobId) => records.push(jobId),
