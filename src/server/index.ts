@@ -109,7 +109,7 @@ setInterval(() => hub.sweep(Date.now()), 2_000);
 function runRetentionCleanup(): void {
   const deleted = storage.cleanupRetention(config.value.retentionDays, Date.now());
   if (deleted.length > 0) {
-    log.info(`retention: removed ${deleted.length} day-folder(s)`, { count: deleted.length });
+    log.info("retention cleanup", { removed: deleted.length });
   }
 }
 runRetentionCleanup();

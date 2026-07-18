@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it, setDefaultTimeout } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { DEFAULT_CONFIG, type Config } from "../../src/server/config";
@@ -103,6 +103,45 @@ describe("processClip", () => {
     expect(result.errors).toEqual([]);
     expect(result.outputs.angles.rel).toBe("angle-rel.mp4");
     expect(existsSync(join(clipDir, "angle-rel.mp4"))).toBe(true);
+  }, 180_000);
+
+  it("combines two angles sequentially when clipDir itself is cwd-relative (matches DATA_DIR in prod)", async () => {
+    // Reproduces the prod failure for concat call site #2 (the combined-list.txt sequential
+    // combine): anglePaths (= join(clipDir, angle-*.mp4)) are relative whenever clipDir itself is
+    // relative — as it is in prod, where DATA_DIR defaults to "data" — and those relative entries
+    // flow straight into the combined-list.txt. ffmpeg's concat demuxer resolves relative list
+    // entries against the LIST FILE's dir, not cwd, so without writeConcatList's resolve() this
+    // combine would fail to open the angle files. mkdtemp's absolute clipDir hid this in every
+    // other test here, since the previous relative-path test only relativizes the raw file paths
+    // (covering call site #1), not clipDir itself.
+    const absClipDir = mkdtempSync(join(tmpdir(), "replay-clip-relcombine-"));
+    mkdirSync(join(absClipDir, "raw"), { recursive: true });
+    const clipDir = relative(process.cwd(), absClipDir);
+    try {
+      const result = await processClip({
+        clipDir,
+        t: 100_000,
+        windowSec: 5,
+        config,
+        angles: [
+          { name: "A", slug: "a", files: [{ path: rawB0, startMs: 90_000 }] },
+          { name: "B", slug: "b", files: [{ path: rawB0, startMs: 90_000 }] },
+        ],
+      });
+      expect(result.errors).toEqual([]);
+      expect(result.outputs.combined).toBe("combined.mp4");
+      expect(existsSync(join(clipDir, "combined.mp4"))).toBe(true);
+
+      const single = await probe(join(clipDir, "angle-a.mp4"));
+      const combined = await probe(join(clipDir, "combined.mp4"));
+      // sequential combine of 2 angles: ~2x a single angle's duration, proving ffmpeg actually
+      // read both angle files via the now-absolute combined-list.txt rather than failing (or
+      // silently producing a truncated clip) on unresolved relative entries.
+      expect(combined.durationSec).toBeGreaterThan(single.durationSec * 1.7);
+      expect(combined.durationSec).toBeLessThan(single.durationSec * 2.3);
+    } finally {
+      rmSync(absClipDir, { recursive: true, force: true });
+    }
   }, 180_000);
 
   it("side-by-side layout stacks the first two angles", async () => {

@@ -48,6 +48,3 @@ export function logger(scope: string): Logger {
     error: (message, fields) => emit("error", scope, message, fields),
   };
 }
-
-// Convenience default scope for quick one-off logging; prefer a scoped logger() per module.
-export default logger("app");

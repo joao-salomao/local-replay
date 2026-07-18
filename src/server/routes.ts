@@ -130,7 +130,7 @@ export function createApp(ctx: AppContext) {
       POST: requireAuth(() => {
         const result = ctx.jobs.trigger(Date.now());
         if ("error" in result) {
-          log.info("record triggered");
+          log.warn("record rejected", { reason: result.error });
           return json(result, result.error === "cooldown" ? 429 : 409);
         }
         log.info("record triggered", { jobId: result.jobId });
