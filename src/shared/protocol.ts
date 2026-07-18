@@ -75,6 +75,7 @@ export type ServerMessage =
       type: "state";
       cameras: CameraInfo[];
       clipDurationSeconds: number;
+      audioSourceName: string | null;
       bufferCycleMinSeconds: number;
       jobs: JobStatus[];
       freeDiskGB: number | null;

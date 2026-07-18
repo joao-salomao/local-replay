@@ -37,4 +37,16 @@ describe("ConfigStore", () => {
     expect(() => store.setClipDuration(4)).toThrow();
     expect(() => store.setClipDuration(20.5)).toThrow();
   });
+
+  it("setAudioSource persists a trimmed name or null and rejects empty/oversized", () => {
+    const dir = tmp();
+    const store = ConfigStore.load(dir);
+    expect(store.value.audioSourceName).toBeNull(); // default: automatic (first angle)
+    store.setAudioSource("  Fundo  ");
+    expect(ConfigStore.load(dir).value.audioSourceName).toBe("Fundo"); // trimmed + persisted
+    store.setAudioSource(null);
+    expect(ConfigStore.load(dir).value.audioSourceName).toBeNull();
+    expect(() => store.setAudioSource("   ")).toThrow(); // empty after trim
+    expect(() => store.setAudioSource("x".repeat(201))).toThrow(); // oversized
+  });
 });

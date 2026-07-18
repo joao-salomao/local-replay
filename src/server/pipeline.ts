@@ -182,9 +182,19 @@ export async function processClip(
     // succeeded — mirrors the per-angle resilience elsewhere in this function.
     try {
       const sideBySideOut = join(clipDir, "combined-side-by-side.mp4");
+      // `cameras[i]` is 1:1 with `anglePaths[i]` (both are pushed together in the loop above), so a
+      // camera's index in `cameras` is also its ffmpeg `-i` input index. Resolve the configured
+      // audio source by name, falling back to the first angle (index 0) when it's unset or that
+      // camera contributed no video to this clip.
+      const audioInputIndex = config.audioSourceName
+        ? Math.max(
+            0,
+            cameras.findIndex((c) => c.name === config.audioSourceName),
+          )
+        : 0;
       const sideBySideArgs = combineSideBySideArgs(
         anglePaths,
-        { width, height: config.targetHeight, fps: config.targetFps },
+        { width, height: config.targetHeight, fps: config.targetFps, audioInputIndex },
         sideBySideOut,
       );
       log.debug("ffmpeg cmd", { cmd: sideBySideArgs.join(" ") });

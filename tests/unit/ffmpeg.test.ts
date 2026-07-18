@@ -144,4 +144,13 @@ describe("combine builders", () => {
       "xstack=inputs=6:layout=0_0|640_0|1280_0|0_540|640_540|1280_540:fill=black",
     );
   });
+
+  it("grid: audio is mapped from the configured input index, not always the first", () => {
+    const joined = combineSideBySideArgs(
+      ["/a.mp4", "/b.mp4", "/c.mp4"],
+      { width: 1920, height: 1080, fps: 30, audioInputIndex: 2 },
+      "/out/c.mp4",
+    ).join(" ");
+    expect(joined).toContain("-map 2:a:0"); // third camera's audio, not the default -map 0:a:0
+  });
 });

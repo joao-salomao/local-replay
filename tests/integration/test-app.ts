@@ -78,6 +78,7 @@ export async function createAppForTest(
         type: "state",
         cameras: hub.cameras(),
         clipDurationSeconds: config.value.clipDurationSeconds,
+        audioSourceName: config.value.audioSourceName,
         bufferCycleMinSeconds: config.value.bufferCycleMinSeconds,
         jobs: ctx.jobs.jobs(),
         freeDiskGB: storage.freeDiskGB(),

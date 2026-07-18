@@ -161,14 +161,16 @@ export function combineSequentialArgs(listFile: string, output: string): string[
  * needs ffmpeg >= 5.0, which every deployment target clears (the Docker image's Debian ffmpeg, the
  * CI runner's, and any modern local install).
  *
- * Requires re-encoding (no `-c copy`). Audio is taken from the FIRST angle only (`-map 0:a:0`):
- * all angles capture the same moment, so mixing their tracks would just echo. Every input is
- * equal-length CFR (guaranteed by `normalizeCutArgs`), so `xstack` terminates cleanly at that one
- * shared length rather than running to some longest/shortest mismatch.
+ * Requires re-encoding (no `-c copy`). Audio is taken from a SINGLE angle — `o.audioInputIndex`
+ * (default 0, the first angle) — since all angles capture the same moment, so mixing their tracks
+ * would just echo; the control page chooses which camera via `config.audioSourceName`, resolved to
+ * an input index in `pipeline.ts`. Every input is equal-length CFR (guaranteed by
+ * `normalizeCutArgs`), so `xstack` terminates cleanly at that one shared length rather than running
+ * to some longest/shortest mismatch.
  */
 export function combineSideBySideArgs(
   inputs: string[],
-  o: { width: number; height: number; fps: number },
+  o: { width: number; height: number; fps: number; audioInputIndex?: number },
   output: string,
 ): string[] {
   const n = inputs.length;
@@ -194,7 +196,7 @@ export function combineSideBySideArgs(
     "-map",
     "[v]",
     "-map",
-    "0:a:0",
+    `${o.audioInputIndex ?? 0}:a:0`,
     "-c:v",
     "libx264",
     "-preset",

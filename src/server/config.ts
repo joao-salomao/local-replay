@@ -22,6 +22,11 @@ export type Config = {
    * always produces BOTH a sequential `combined.mp4` and a side-by-side `combined-side-by-side.mp4`
    * whenever ≥2 angles succeed, regardless of this value. Kept as a config field to avoid churn. */
   layout: Layout;
+  /** Display name of the camera whose audio track the simultaneous side-by-side combine uses
+   * (`pipeline.ts` maps that angle's audio; the sequential combine keeps each segment's own audio).
+   * `null` = automatic: the first angle's audio (the historical default). A name that matches no
+   * angle in a given clip also falls back to the first angle. Set from the control page. */
+  audioSourceName: string | null;
   targetHeight: number;
   targetFps: number;
   /** Days to keep clips before automatic deletion; `null` disables cleanup entirely. */
@@ -33,6 +38,7 @@ export const DEFAULT_CONFIG: Omit<Config, "password"> = {
   clipDurationMaxSeconds: 60,
   bufferCycleMinSeconds: 30,
   layout: "sequential",
+  audioSourceName: null,
   targetHeight: 1080,
   targetFps: 60,
   retentionDays: null,
@@ -78,6 +84,19 @@ export class ConfigStore {
       throw new Error(`invalid clip duration: ${seconds}`);
     }
     this.value.clipDurationSeconds = seconds;
+    this.save();
+  }
+
+  /** Selects which camera's audio the side-by-side combine uses, by display name; `null` restores
+   * the automatic (first-angle) default. Trims the name; rejects an empty or oversized string. */
+  setAudioSource(name: string | null): void {
+    if (name === null) {
+      this.value.audioSourceName = null;
+    } else {
+      const trimmed = name.trim();
+      if (!trimmed || trimmed.length > 200) throw new Error(`invalid audio source: ${name}`);
+      this.value.audioSourceName = trimmed;
+    }
     this.save();
   }
 

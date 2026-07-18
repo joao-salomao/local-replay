@@ -108,6 +108,43 @@ describe("routes", () => {
     expect(state.cameras).toEqual([]);
   });
 
+  it("sets, clears, and validates the combined-audio source camera", async () => {
+    const cookie = await login();
+    const set = await fetch(`${base}/api/config/audio-source`, {
+      method: "POST",
+      headers: { cookie },
+      body: JSON.stringify({ name: "Fundo" }),
+    });
+    expect((await set.json()).audioSourceName).toBe("Fundo");
+    let state = await (await fetch(`${base}/api/state`, { headers: { cookie } })).json();
+    expect(state.audioSourceName).toBe("Fundo");
+    // null clears it back to automatic (first angle)
+    const clear = await fetch(`${base}/api/config/audio-source`, {
+      method: "POST",
+      headers: { cookie },
+      body: JSON.stringify({ name: null }),
+    });
+    expect((await clear.json()).audioSourceName).toBeNull();
+    // whitespace-only name is rejected and leaves the value unchanged
+    const bad = await fetch(`${base}/api/config/audio-source`, {
+      method: "POST",
+      headers: { cookie },
+      body: JSON.stringify({ name: "   " }),
+    });
+    expect(bad.status).toBe(400);
+    expect((await bad.json()).error).toBe("invalid name");
+    // Non-JSON body: req.json() rejects and the route's `.catch(() => ({}))` fallback leaves name
+    // undefined, treated as null (automatic) — exercises that fallback arrow.
+    const nonJson = await fetch(`${base}/api/config/audio-source`, {
+      method: "POST",
+      headers: { cookie },
+      body: "not json at all",
+    });
+    expect((await nonJson.json()).audioSourceName).toBeNull();
+    state = await (await fetch(`${base}/api/state`, { headers: { cookie } })).json();
+    expect(state.audioSourceName).toBeNull();
+  });
+
   it("blocks path traversal on /files", async () => {
     const cookie = await login();
     expect(

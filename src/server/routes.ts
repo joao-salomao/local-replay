@@ -182,11 +182,30 @@ export function createApp(ctx: AppContext) {
       }),
     },
 
+    "/api/config/audio-source": {
+      POST: requireAuth(async (req) => {
+        const body = (await req.json().catch(() => ({}))) as { name?: string | null };
+        try {
+          ctx.config.setAudioSource(body.name ?? null);
+        } catch {
+          return json({ error: "invalid name" }, 400);
+        }
+        // Like clip-duration: a config change doesn't flow through any WS message, so ask Hub to
+        // rebroadcast state explicitly (see the note on the clip-duration handler above).
+        ctx.hub.notifyStateChanged();
+        log.info("audio source changed", {
+          audioSourceName: ctx.config.value.audioSourceName ?? "(auto)",
+        });
+        return json({ audioSourceName: ctx.config.value.audioSourceName });
+      }),
+    },
+
     "/api/state": {
       GET: requireAuth(() =>
         json({
           cameras: ctx.hub.cameras(),
           clipDurationSeconds: ctx.config.value.clipDurationSeconds,
+          audioSourceName: ctx.config.value.audioSourceName,
           jobs: ctx.jobs.jobs(),
           freeDiskGB: ctx.storage.freeDiskGB(),
         }),

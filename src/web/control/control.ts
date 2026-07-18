@@ -13,6 +13,7 @@ import { WsClient } from "@web/shared/ws-client";
 type State = {
   cameras: CameraInfo[];
   clipDurationSeconds: number;
+  audioSourceName: string | null;
   jobs: JobStatus[];
   freeDiskGB?: number | null;
 };
@@ -26,7 +27,7 @@ function jobLabel(job: JobStatus): string {
   return `Lance #${job.clipNumber} — erro`;
 }
 
-let state: State = { cameras: [], clipDurationSeconds: 20, jobs: [] };
+let state: State = { cameras: [], clipDurationSeconds: 20, audioSourceName: null, jobs: [] };
 
 /**
  * Full unconditional re-render from `state`. Unlike the clips gallery's polling loop (which
@@ -65,6 +66,18 @@ function render(): void {
         });
       });
     });
+  // Audio-source options: the online cameras, plus — if the saved choice is a camera that's
+  // currently offline — that name too (so the selection stays visible), plus the "automatic" default.
+  const audioNames = [...new Set(state.cameras.filter((c) => c.online).map((c) => c.name))];
+  if (state.audioSourceName && !audioNames.includes(state.audioSourceName)) {
+    audioNames.push(state.audioSourceName);
+  }
+  $("audio-source").innerHTML = `<option value="">Automática (1ª câmera)</option>${audioNames
+    .map(
+      (n) =>
+        `<option value="${esc(n)}"${n === state.audioSourceName ? " selected" : ""}>${esc(n)}</option>`,
+    )
+    .join("")}`;
   $("jobs").innerHTML = state.jobs
     .slice(0, 5)
     .map(
@@ -84,6 +97,13 @@ $("record").onclick = async () => {
   }
 };
 
+// Wired once — the <select> element itself persists across renders; only its <option>s are rebuilt
+// in render(). An empty value means automatic (the first camera's audio).
+$<HTMLSelectElement>("audio-source").onchange = async (e) => {
+  const name = (e.target as HTMLSelectElement).value || null;
+  await api("/api/config/audio-source", { method: "POST", body: JSON.stringify({ name }) });
+};
+
 const ws = new WsClient({
   onStatus: (connected) => {
     $("conn-dot").classList.toggle("on", connected);
@@ -95,6 +115,7 @@ const ws = new WsClient({
         ...state,
         cameras: msg.cameras,
         clipDurationSeconds: msg.clipDurationSeconds,
+        audioSourceName: msg.audioSourceName,
         jobs: msg.jobs,
         freeDiskGB: msg.freeDiskGB,
       };

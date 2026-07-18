@@ -325,6 +325,28 @@ describe("processClip", () => {
     expect(sideBySide.durationSec).toBeLessThan(single.durationSec * 1.3); // simultaneous: ~1x
   }, 180_000);
 
+  it("side-by-side uses the configured camera's audio (audioSourceName -> audioInputIndex)", async () => {
+    // With audioSourceName pointing at the SECOND camera, the side-by-side combine maps input 1's
+    // audio (`-map 1:a:0`) instead of the default input 0. A probe can't reveal WHICH source was
+    // used, but this drives the real non-zero audio mapping end to end (a wrong index makes ffmpeg
+    // fail with a bad stream map) and asserts the output still carries an audio stream.
+    const clipDir = mkdtempSync(join(tmpdir(), "replay-clip-"));
+    mkdirSync(join(clipDir, "raw"), { recursive: true });
+    const result = await processClip({
+      clipDir,
+      t: 100_000,
+      windowSec: 5,
+      config: { ...config, audioSourceName: "B" },
+      angles: [
+        { name: "A", slug: "a", files: [{ path: rawB0, startMs: 90_000 }] },
+        { name: "B", slug: "b", files: [{ path: rawB0, startMs: 90_000 }] },
+      ],
+    });
+    expect(result.errors).toEqual([]);
+    expect(result.outputs.combinedSideBySide).toBe("combined-side-by-side.mp4");
+    expect((await probe(join(clipDir, "combined-side-by-side.mp4"))).hasAudio).toBe(true);
+  }, 180_000);
+
   it("keeps valid angles when one angle's file is corrupt", async () => {
     const clipDir = mkdtempSync(join(tmpdir(), "replay-clip-"));
     mkdirSync(join(clipDir, "raw"), { recursive: true });
