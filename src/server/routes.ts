@@ -106,7 +106,7 @@ export function createApp(ctx: AppContext) {
         return new Response(Bun.file(certPath), {
           headers: {
             "content-type": "application/x-x509-ca-cert",
-            "content-disposition": 'attachment; filename="replay-local.crt"',
+            "content-disposition": 'attachment; filename="local-replay.crt"',
           },
         });
       },

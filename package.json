@@ -1,5 +1,5 @@
 {
-  "name": "replay-local",
+  "name": "local-replay",
   "private": true,
   "type": "module",
   "scripts": {

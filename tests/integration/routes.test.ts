@@ -134,7 +134,7 @@ describe("routes", () => {
     writeFileSync(join(dataDirRef, "certs", "cert.pem"), "FAKE PEM");
     const res = await fetch(`${base}/cert`);
     expect(res.status).toBe(200);
-    expect(res.headers.get("content-disposition")).toContain("replay-local.crt");
+    expect(res.headers.get("content-disposition")).toContain("local-replay.crt");
     expect(await res.text()).toBe("FAKE PEM");
   });
 

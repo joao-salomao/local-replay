@@ -1,4 +1,4 @@
-# Replay Local
+# Local Replay
 
 Sistema local de replay esportivo para uso próprio (hobby) em uma quadra: celulares comuns viram
 câmeras conectadas a um servidor na rede local. Depois que um lance acontece, qualquer pessoa
@@ -131,7 +131,7 @@ rodar fora do Docker ou mudar as portas padrão):
 
 ## Rodando na internet (atrás de um proxy)
 
-Por padrão o Replay Local roda em **modo LAN** (tudo acima): HTTPS autoassinado, pensado para uso
+Por padrão o Local Replay roda em **modo LAN** (tudo acima): HTTPS autoassinado, pensado para uso
 dentro da rede Wi-Fi de uma quadra. Se quiser expor o sistema na internet — por exemplo, um evento
 em que nem todo mundo consegue entrar na mesma rede — dá para rodar em **modo proxy**: o Bun serve
 HTTP puro numa porta interna, e um proxy reverso na frente (Caddy, nginx, Cloudflare Tunnel etc.)

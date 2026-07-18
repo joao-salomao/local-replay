@@ -2,7 +2,7 @@
   "lockfileVersion": 1,
   "workspaces": {
     "": {
-      "name": "replay-local",
+      "name": "local-replay",
       "dependencies": {
         "qrcode": "^1.5.4",
       },

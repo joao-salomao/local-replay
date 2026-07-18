@@ -181,6 +181,6 @@ log.info(
   behindProxy ? { mode: "proxy", port, entryUrl } : { mode: "lan", httpsPort, httpPort, entryUrl },
 );
 
-console.log(`\nReplay Local no ar: ${entryUrl}`);
+console.log(`\nLocal Replay no ar: ${entryUrl}`);
 console.log(`Senha de acesso: ${config.value.password}\n`);
 console.log(await QRCode.toString(entryUrl, { type: "terminal", small: true }));
