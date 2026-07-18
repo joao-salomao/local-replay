@@ -31,7 +31,17 @@ type CameraConn = { info: CameraInfo; lastSeen: number };
 
 export class Hub {
   private camerasById = new Map<string, CameraConn>();
-  onStateChanged: () => void = () => {};
+  private stateChangedListener: () => void = () => {};
+
+  /** Register the callback invoked whenever the camera registry changes (register, status update, offline sweep, or disconnect). Replaces the previous public `onStateChanged` property. */
+  setOnStateChanged(listener: () => void): void {
+    this.stateChangedListener = listener;
+  }
+
+  /** Fire the registered state-changed listener manually — used when something outside the hub (e.g. a config change) should trigger a re-broadcast of the full state. */
+  notifyStateChanged(): void {
+    this.stateChangedListener();
+  }
 
   cameras(): CameraInfo[] {
     return [...this.camerasById.values()].map((c) => c.info);
@@ -83,7 +93,7 @@ export class Hub {
         ws.subscribe(TOPIC_CONTROLS);
         log.debug("control registered");
       }
-      this.onStateChanged();
+      this.stateChangedListener();
       return;
     }
     // Remaining message types (cameraStatus, hb) only make sense for an already-registered
@@ -103,16 +113,16 @@ export class Hub {
       cam.info.width = msg.width;
       cam.info.height = msg.height;
       cam.info.fps = msg.fps;
-      if (changed) this.onStateChanged(); // cameras re-report every 5s; only broadcast real changes
+      if (changed) this.stateChangedListener(); // cameras re-report every 5s; only broadcast real changes
     } else if (wasOffline) {
-      this.onStateChanged();
+      this.stateChangedListener();
     }
   }
 
   /** Drops the camera on disconnect (control connections have no registry entry to remove, so
    * closing one never triggers a broadcast here). */
   close(ws: ServerWebSocket<WSData>): void {
-    if (ws.data.cameraId && this.camerasById.delete(ws.data.cameraId)) this.onStateChanged();
+    if (ws.data.cameraId && this.camerasById.delete(ws.data.cameraId)) this.stateChangedListener();
   }
 
   /** Periodic staleness sweep (driven by `server/index.ts`'s interval) marking cameras offline
@@ -131,6 +141,6 @@ export class Hub {
         if (!online) log.info("camera offline", { id: cam.info.id, name: cam.info.name });
       }
     }
-    if (changed) this.onStateChanged();
+    if (changed) this.stateChangedListener();
   }
 }

@@ -144,7 +144,7 @@ function publishState(): void {
   };
   server.publish(TOPIC_ALL, JSON.stringify(state));
 }
-hub.onStateChanged = publishState;
+hub.setOnStateChanged(publishState);
 
 log.debug("sweep interval started", { intervalMs: 2_000 });
 // Drives hub.ts's offline-detection sweep. Polled every 2s against OFFLINE_AFTER_MS (10s), so an

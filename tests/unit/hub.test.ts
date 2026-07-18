@@ -17,7 +17,7 @@ describe("Hub", () => {
   it("registers a camera, replies with its id, and lists it online", () => {
     const hub = new Hub();
     let changes = 0;
-    hub.onStateChanged = () => changes++;
+    hub.setOnStateChanged(() => changes++);
     const { ws, sent, topics } = fakeWs();
     hub.open(ws);
     hub.message(ws, JSON.stringify({ type: "register", role: "camera", name: "Fundo" }), 1000);
@@ -66,7 +66,7 @@ describe("Hub", () => {
     hub.open(ws);
     hub.message(ws, JSON.stringify({ type: "register", role: "camera", name: "A" }), 0);
     let changes = 0;
-    hub.onStateChanged = () => changes++;
+    hub.setOnStateChanged(() => changes++);
 
     hub.message(
       ws,

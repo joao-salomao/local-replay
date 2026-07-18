@@ -71,7 +71,7 @@ export async function createAppForTest(
   });
   publishLog = (entry) =>
     server.publish(TOPIC_CONTROLS, JSON.stringify({ type: "log", entry } satisfies ServerMessage));
-  hub.onStateChanged = () =>
+  hub.setOnStateChanged(() =>
     server.publish(
       TOPIC_ALL,
       JSON.stringify({
@@ -82,7 +82,8 @@ export async function createAppForTest(
         jobs: ctx.jobs.jobs(),
         freeDiskGB: storage.freeDiskGB(),
       } satisfies ServerMessage),
-    );
+    ),
+  );
   return {
     base: `http://localhost:${server.port}`,
     ws: `ws://localhost:${server.port}/ws`,

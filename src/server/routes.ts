@@ -172,7 +172,7 @@ export function createApp(ctx: AppContext) {
         ctx.config.setClipDuration(body.seconds!);
         // Config changes aren't something Hub can detect on its own (they don't flow through any
         // WS message) — routes.ts has to explicitly ask for a state broadcast here.
-        ctx.hub.onStateChanged();
+        ctx.hub.notifyStateChanged();
         log.info("clip duration changed", { seconds: ctx.config.value.clipDurationSeconds });
         return json({ clipDurationSeconds: ctx.config.value.clipDurationSeconds });
       }),
