@@ -6,6 +6,8 @@ cameras connected to a server on the local network. After a play happens, anyone
 download, and share. Everything runs on the local network, with no dependency on the internet
 during use (only when building the Docker image).
 
+![The Local Replay control panel, showing the connected cameras (each with the physical camera/lens it's using), clip-duration and combined-audio pickers, recent plays, and the live server log](assets/control-panel.png)
+
 ## Table of Contents
 
 - [Requirements](#requirements)
