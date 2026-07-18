@@ -1,163 +1,169 @@
 # Local Replay
 
-Sistema local de replay esportivo para uso próprio (hobby) em uma quadra: celulares comuns viram
-câmeras conectadas a um servidor na rede local. Depois que um lance acontece, qualquer pessoa
-aperta **GRAVAR** e recebe, na galeria, um vídeo combinado dos ângulos — pronto para assistir,
-baixar e compartilhar. Tudo roda na rede local, sem depender de internet durante o uso (só na
-hora de montar a imagem Docker).
+A local sports instant-replay system for personal (hobby) use on a court: ordinary phones become
+cameras connected to a server on the local network. After a play happens, anyone presses
+**GRAVAR** (record) and gets a combined video of the angles in the gallery — ready to watch,
+download, and share. Everything runs on the local network, with no dependency on the internet
+during use (only when building the Docker image).
 
-## Sumário
+## Table of Contents
 
-- [Requisitos](#requisitos)
-- [Como iniciar](#como-iniciar)
-- [Como usar](#como-usar)
-- [Conectando cada aparelho](#conectando-cada-aparelho)
-- [Configuração](#configuração)
-- [Rodando na internet (atrás de um proxy)](#rodando-na-internet-atrás-de-um-proxy)
-- [Desenvolvimento](#desenvolvimento)
-- [Checklist de quadra](#checklist-de-quadra)
-- [Nota de performance](#nota-de-performance)
-- [Estrutura dos dados](#estrutura-dos-dados)
-- [Solução de problemas](#solução-de-problemas)
+- [Requirements](#requirements)
+- [Getting Started](#getting-started)
+- [How to Use](#how-to-use)
+- [Connecting Each Device](#connecting-each-device)
+- [Configuration](#configuration)
+- [Running on the Internet (Behind a Proxy)](#running-on-the-internet-behind-a-proxy)
+- [Development](#development)
+- [Court Checklist](#court-checklist)
+- [Performance Note](#performance-note)
+- [Data Structure](#data-structure)
+- [Troubleshooting](#troubleshooting)
 
-## Requisitos
+## Requirements
 
-- **Docker** (recomendado) — Docker Desktop, OrbStack ou qualquer engine compatível com
-  `docker compose`. É só isso; o container já traz Bun, FFmpeg e OpenSSL.
-- **Ou, para rodar sem container:** [Bun](https://bun.sh) 1.x + `ffmpeg` + `openssl` no PATH da
-  máquina.
-- Um Mac (ou outra máquina) na mesma rede Wi-Fi dos celulares que vão filmar.
+- **Docker** (recommended) — Docker Desktop, OrbStack, or any engine compatible with
+  `docker compose`. That's all you need — the container already includes Bun, FFmpeg, and
+  OpenSSL.
+- **Or, to run without a container:** [Bun](https://bun.sh) 1.x + `ffmpeg` + `openssl` on the
+  machine's PATH.
+- A Mac (or another machine) on the same Wi-Fi network as the phones that will be filming.
 
-## Como iniciar
+## Getting Started
 
 ```bash
 ./start.sh
 ```
 
-O script detecta o IP da sua máquina na rede local, sobe o `docker compose` (buildando a imagem
-na primeira vez) e imprime no terminal a URL de entrada junto com um **QR code**. Aponte a câmera
-de cada celular para o QR do terminal (ou digite a URL manualmente) para abrir o sistema.
+The script detects your machine's IP on the local network, brings up `docker compose` (building
+the image the first time) and prints the entry URL in the terminal along with a **QR code**. Point
+each phone's camera at the terminal's QR code (or type the URL manually) to open the system.
 
-Na **primeira execução**, o servidor gera automaticamente uma senha de acesso e a grava em
-`data/config.json`; a senha também é impressa no terminal junto com a URL, logo abaixo do QR
-code. Guarde-a — ela não muda entre reinícios, só é gerada uma vez. Se precisar vê-la de novo mais
-tarde: `docker compose logs replay | grep Senha`, ou abra `data/config.json` e leia o campo
-`"password"`.
+On the **first run**, the server automatically generates an access password and saves it to
+`data/config.json`; the password is also printed in the terminal along with the URL, right below
+the QR code. Save it — it doesn't change between restarts, it's only generated once. If you need
+to see it again later: `docker compose logs replay | grep Senha`, or open `data/config.json` and
+read the `"password"` field.
 
-Para parar: `Ctrl+C` no terminal onde o `start.sh` está rodando, ou `docker compose down` em outro
-terminal. Os dados (config, certificado, clipes) ficam persistidos em `./data` no host graças ao
-volume do `docker-compose.yml` — subir de novo com `./start.sh` não perde nada.
+To stop: `Ctrl+C` in the terminal where `start.sh` is running, or `docker compose down` in another
+terminal. The data (config, certificate, clips) is persisted in `./data` on the host thanks to the
+volume in `docker-compose.yml` — starting it up again with `./start.sh` doesn't lose anything.
 
-## Como usar
+## How to Use
 
-Ao abrir a URL, cada aparelho digita a senha e escolhe um papel:
+After opening the URL, each device enters the password and picks a role:
 
-- **📷 Ser câmera** — transforma o celular em câmera fixa. Dê um nome ao ângulo (ex: "Fundo",
-  "Lateral rede"), monte o celular num tripé, **deixe-o na tomada** e mantenha a página em
-  primeiro plano durante toda a sessão (a página mostra um aviso e recupera sozinha o buffer se a
-  aba for escondida ou o sistema operacional pausar a câmera em segundo plano).
-- **🔴 Controlar gravação** — a página de controle: botão **GRAVAR** grande, seletor de duração do
-  clipe (10/20/30/45/60s), lista das câmeras online com a resolução/fps ao vivo de cada uma,
-  status do último lance (capturando → processando → pronto) e um QR code para outros aparelhos
-  entrarem. Pode ser usada por qualquer celular autenticado ou por um tablet dedicado.
-- **🎬 Ver lances** — a galeria (`/clips`): lista os clipes mais recentes primeiro, com player,
-  links de download (combinado + cada ângulo individual), botão **📤 Compartilhar** (abre o menu
-  nativo de compartilhamento do celular, com fallback para download em navegadores sem essa API)
-  e um QR code por clipe apontando direto para o arquivo de vídeo.
+- **📷 Ser câmera** (Be a camera) — turns the phone into a fixed camera. Give the angle a name —
+  e.g. "Fundo" (back) or "Lateral rede" (net side) — mount the phone on a tripod, **keep it
+  plugged in**, and keep the page in the foreground for the whole session (the page shows a
+  warning and recovers the buffer on its own if the tab is hidden or the operating system pauses
+  the camera in the background).
+- **🔴 Controlar gravação** (Control recording) — the control page: a big **GRAVAR** button, a
+  clip duration selector (10/20/30/45/60s), a list of the cameras online with each one's live
+  resolution/fps, the status of the last play (capturando → processando → pronto — capturing →
+  processing → ready), and a QR code for other devices to join. It can be used by any
+  authenticated phone or by a dedicated tablet.
+- **🎬 Ver lances** (View plays) — the gallery (`/clips`): lists the most recent clips first, with
+  a player, download links (combined + each individual angle), a **📤 Compartilhar** (Share)
+  button (opens the phone's native share menu, with a fallback to download on browsers without
+  that API), and a QR code per clip pointing straight to the video file.
 
-**Fluxo de um lance:** as câmeras ficam conectadas, filmando e bufferizando os últimos segundos
-localmente. Quando alguém aperta GRAVAR em `/control`, o servidor registra o instante `T`, cria um
-job e avisa todas as câmeras online. Cada câmera termina o trecho em andamento e envia os arquivos
-do buffer que cobrem a janela `[T − duração, T]`. O servidor aguarda os uploads (até 30s — quem não
-entregar fica de fora do lance, ele ainda sai com os ângulos restantes), processa com FFmpeg
-(corte exato, normalização, combinação dos ângulos) e o clipe aparece em `/clips`; `/control`
-mostra "Lance pronto".
+**Flow of a play:** the cameras stay connected, filming and buffering the last few seconds
+locally. When someone presses GRAVAR on `/control`, the server records the instant `T`, creates a
+job, and notifies every camera that's online. Each camera finishes the segment in progress and
+sends the buffer files covering the window `[T − duration, T]`. The server waits for the uploads
+(up to 30s — whoever doesn't deliver in time is left out of the play, which still comes out with
+the remaining angles), processes them with FFmpeg (exact cut, normalization, combining the
+angles), and the clip appears in `/clips`; `/control` shows "Lance pronto" (Play ready).
 
-## Conectando cada aparelho
+## Connecting Each Device
 
-O certificado HTTPS é autoassinado (necessário para a câmera do navegador funcionar), então cada
-aparelho precisa aceitar um aviso de segurança uma vez.
+The HTTPS certificate is self-signed (required for the browser camera to work), so each device
+needs to accept a security warning once.
 
-**iPhone (use o Safari):**
-1. Abra a URL no Safari e toque em "Continuar" (ou "Avançado → Visitar este site") no aviso de
-   segurança.
-2. Se a página carregar mas a conexão em tempo real (WebSocket) não completar — câmera presa em
-   "Desconectado" — o aviso do navegador não foi suficiente. Baixe o certificado em `/cert` (tem
-   um atalho na própria tela de login, em "Problemas para conectar no iPhone?") e instale:
-   **Ajustes → Geral → VPN e Gerenciamento de Dispositivo** (instalar o perfil baixado), depois
-   **Ajustes → Geral → Sobre → Confiança de Certificado** (ativar a confiança para o certificado).
+**iPhone (use Safari):**
+1. Open the URL in Safari and tap "Continuar" (Continue) — or "Avançado → Visitar este site"
+   (Advanced → Visit this website) — on the security warning.
+2. If the page loads but the real-time connection (WebSocket) doesn't complete — camera stuck on
+   "Desconectado" (Disconnected) — the browser warning wasn't enough. Download the certificate at
+   `/cert` — there's a shortcut right on the login screen, under "Problemas para conectar no
+   iPhone?" (Trouble connecting on iPhone?) — and install it: go to **Ajustes → Geral → VPN e
+   Gerenciamento de Dispositivo** (Settings → General → VPN & Device Management) and install the
+   downloaded profile, then go to **Ajustes → Geral → Sobre → Confiança de Certificado** (Settings
+   → General → About → Certificate Trust Settings) and enable trust for the certificate.
 
-**Android (use o Chrome):** toque em **"Avançado → Continuar"** no aviso do navegador. Isso já é
-suficiente, inclusive para o WebSocket.
+**Android (use Chrome):** tap **"Avançado → Continuar"** (Advanced → Continue) on the browser
+warning. That's already enough, including for the WebSocket.
 
-**Em ambos os aparelhos:**
-- Desligue a economia/otimização de bateria para o navegador durante a sessão — ela pode suspender
-  a página e derrubar a câmera.
-- Deixe o celular na tomada e à sombra: calor prolongado derruba o fps e a qualidade da captura em
-  ambas as plataformas.
-- 60fps é **melhor esforço do navegador** — vários aparelhos (inclusive iPhones) entregam 30fps
-  mesmo pedindo 60 como ideal. A página `/camera` mostra a resolução/fps reais obtidos, atualizados
-  a cada 5s; a saída final do servidor é conformada para a resolução/fps alvo (padrão 1080p60,
-  ajustável em `targetHeight`/`targetFps`) independente da fonte.
+**On both devices:**
+- Turn off battery saving/optimization for the browser during the session — it can suspend the
+  page and kill the camera.
+- Keep the phone plugged in and in the shade: prolonged heat drops the fps and capture quality on
+  both platforms.
+- 60fps is the browser's **best effort** — several devices (including iPhones) deliver 30fps even
+  when 60 is requested as the ideal. The `/camera` page shows the actual resolution/fps obtained,
+  updated every 5s; the server's final output is conformed to the target resolution/fps (default
+  1080p60, adjustable via `targetHeight`/`targetFps`) regardless of the source.
 
-## Configuração
+## Configuration
 
-Editável em `data/config.json` no host (pare o container, edite, suba de novo — o arquivo só é
-lido na inicialização, exceto `clipDurationSeconds`, que também pode ser trocado ao vivo pelo
-seletor em `/control`, sem precisar mexer no arquivo nem reiniciar):
+Editable in `data/config.json` on the host (stop the container, edit it, start it again — the
+file is only read on startup, except for `clipDurationSeconds`, which can also be changed live via
+the selector in `/control`, without touching the file or restarting):
 
-| Chave | Padrão | Descrição |
+| Key | Default | Description |
 |---|---|---|
-| `clipDurationSeconds` | `20` | Duração do clipe (segundos) usada no **próximo** lance. Também ajustável ao vivo em `/control`. |
-| `clipDurationMaxSeconds` | `60` | Teto aceito para `clipDurationSeconds` (o servidor rejeita valores maiores). |
-| `bufferCycleMinSeconds` | `30` | Duração mínima do ciclo de buffer de cada câmera. O ciclo real usado é `max(bufferCycleMinSeconds, clipDurationSeconds)`. |
-| `layout` | `"sequential"` | `"sequential"` (ângulos em sequência, corte seco) ou `"side-by-side"` (ângulos lado a lado na tela, áudio do primeiro ângulo). |
-| `targetHeight` | `1080` | Altura alvo (px) da saída normalizada. |
-| `targetFps` | `60` | FPS alvo da saída normalizada. |
-| `retentionDays` | `null` | Dias para manter clipes. `null` = manter tudo para sempre. Se definido, a limpeza roda na inicialização e depois 1×/dia. |
+| `clipDurationSeconds` | `20` | Clip duration (seconds) used for the **next** play. Also adjustable live in `/control`. |
+| `clipDurationMaxSeconds` | `60` | Ceiling accepted for `clipDurationSeconds` (the server rejects higher values). |
+| `bufferCycleMinSeconds` | `30` | Minimum duration of each camera's buffer cycle. The actual cycle used is `max(bufferCycleMinSeconds, clipDurationSeconds)`. |
+| `layout` | `"sequential"` | `"sequential"` (angles in sequence, hard cut) or `"side-by-side"` (angles side by side on screen, audio from the first angle). |
+| `targetHeight` | `1080` | Target height (px) of the normalized output. |
+| `targetFps` | `60` | Target FPS of the normalized output. |
+| `retentionDays` | `null` | Days to keep clips. `null` = keep everything forever. If set, cleanup runs on startup and then once a day. |
 
-O arquivo também guarda `password` (gerada automaticamente no primeiro boot — veja
-[Como iniciar](#como-iniciar)).
+The file also stores `password` (generated automatically on first boot — see
+[Getting Started](#getting-started)).
 
-**Variáveis de ambiente** (já configuradas pelo `docker-compose.yml`/`start.sh`; só mexa se for
-rodar fora do Docker ou mudar as portas padrão):
+**Environment variables** (already configured by `docker-compose.yml`/`start.sh`; only touch these
+if you plan to run outside Docker or change the default ports):
 
-| Variável | Padrão | Descrição |
+| Variable | Default | Description |
 |---|---|---|
-| `DATA_DIR` | `data` | Pasta onde ficam `config.json`, `certs/` e `clips/`. |
-| `HTTPS_PORT` | `8443` | Porta HTTPS — é a porta de entrada do sistema. |
-| `HTTP_PORT` | `8080` | Porta HTTP; só responde com redirect 301 para a HTTPS. |
-| `HOST_LAN_IP` | *(vazio)* | IP da máquina na rede local, usado no certificado (SAN) e na URL impressa no boot. O `start.sh` já detecta e injeta esse valor sozinho. |
+| `DATA_DIR` | `data` | Folder where `config.json`, `certs/`, and `clips/` live. |
+| `HTTPS_PORT` | `8443` | HTTPS port — this is the system's entry port. |
+| `HTTP_PORT` | `8080` | HTTP port; only responds with a 301 redirect to HTTPS. |
+| `HOST_LAN_IP` | *(empty)* | IP of the machine on the local network, used in the certificate (SAN) and in the URL printed on boot. `start.sh` already detects and injects this value on its own. |
 
-## Rodando na internet (atrás de um proxy)
+## Running on the Internet (Behind a Proxy)
 
-Por padrão o Local Replay roda em **modo LAN** (tudo acima): HTTPS autoassinado, pensado para uso
-dentro da rede Wi-Fi de uma quadra. Se quiser expor o sistema na internet — por exemplo, um evento
-em que nem todo mundo consegue entrar na mesma rede — dá para rodar em **modo proxy**: o Bun serve
-HTTP puro numa porta interna, e um proxy reverso na frente (Caddy, nginx, Cloudflare Tunnel etc.)
-cuida do TLS com um certificado de verdade.
+By default, Local Replay runs in **LAN mode** (everything above): self-signed HTTPS, designed for
+use within a court's Wi-Fi network. If you want to expose the system to the internet — for
+example, for an event where not everyone can get on the same network — you can run it in **proxy
+mode**: Bun serves plain HTTP on an internal port, and a reverse proxy in front (Caddy, nginx,
+Cloudflare Tunnel, etc.) handles TLS with a real certificate.
 
-**Variáveis de ambiente do modo proxy** (além das já existentes; `HTTPS_PORT`/`HTTP_PORT`/
-`HOST_LAN_IP` da tabela acima são ignoradas nesse modo):
+**Proxy mode environment variables** (in addition to the ones above; `HTTPS_PORT`/`HTTP_PORT`/
+`HOST_LAN_IP` from the table above are ignored in this mode):
 
-| Variável | Padrão | Descrição |
+| Variable | Default | Description |
 |---|---|---|
-| `BEHIND_PROXY` | *(vazio)* | Ativa o modo proxy quando definida como `1`, `true` ou `yes` (case-insensitive; ex.: `BEHIND_PROXY=1`) — qualquer outro valor, incluindo vazio, `false` ou `0`, mantém o modo LAN padrão. Nesse modo desliga a geração do certificado autoassinado e o redirect HTTP→HTTPS; o servidor passa a escutar HTTP puro em `PORT`. |
-| `PUBLIC_URL` | *(vazio)* | Endereço público servido pelo proxy (ex.: `https://replay.exemplo.com`), usado na mensagem de boot e no QR code do terminal. **Se não for definida, o servidor sobe mesmo assim, mas avisa no terminal** que o QR/link vai apontar para `localhost` e não vai funcionar nos aparelhos dos jogadores. |
-| `PORT` | `8080` | Porta HTTP pura em que o app escuta, para o proxy encaminhar as requisições. |
+| `BEHIND_PROXY` | *(empty)* | Enables proxy mode when set to `1`, `true`, or `yes` (case-insensitive; e.g., `BEHIND_PROXY=1`) — any other value, including empty, `false`, or `0`, keeps the default LAN mode. In this mode, self-signed certificate generation and the HTTP→HTTPS redirect are turned off; the server instead listens for plain HTTP on `PORT`. |
+| `PUBLIC_URL` | *(empty)* | Public address served by the proxy (e.g., `https://replay.exemplo.com`), used in the boot message and the terminal's QR code. **If not set, the server still boots, but warns in the terminal** that the QR code/link will point to `localhost` and won't work on players' devices. |
+| `PORT` | `8080` | Plain HTTP port the app listens on, for the proxy to forward requests to. |
 
-Com `BEHIND_PROXY` ativo, o IP usado para limitar tentativas de login (rate limit) passa a vir do
-cabeçalho `X-Forwarded-For` — a **última** entrada da lista, não a primeira, pois é essa que reflete
-o peer observado diretamente pelo proxy da borda; entradas anteriores vêm do próprio cliente e podem
-ser forjadas — em vez do IP do socket (nesse modo o socket é sempre o do proxy, não o do cliente).
-Qualquer proxy reverso comum já define esse cabeçalho com o IP real do cliente por padrão (veja a
-Nota de segurança abaixo para o cuidado necessário com a porta `PORT`).
+With `BEHIND_PROXY` enabled, the IP used to rate-limit login attempts comes from the
+`X-Forwarded-For` header — the **last** entry in the list, not the first, since that's the one
+that reflects the peer observed directly by the edge proxy; earlier entries come from the client
+itself and can be forged — instead of the socket's IP (in this mode the socket always belongs to
+the proxy, not the client). Any common reverse proxy already sets this header to the client's real
+IP by default (see the Security Note below for the care needed around the `PORT` port).
 
-### Exemplo com Caddy
+### Example with Caddy
 
-O [Caddy](https://caddyserver.com) provisiona certificado Let's Encrypt automaticamente para o
-domínio configurado e já encaminha WebSocket sem nenhuma configuração extra (diferente do nginx,
-que exige os headers `Upgrade`/`Connection` manualmente). Um `Caddyfile` mínimo:
+[Caddy](https://caddyserver.com) automatically provisions a Let's Encrypt certificate for the
+configured domain and already forwards WebSocket traffic with no extra configuration (unlike
+nginx, which requires the `Upgrade`/`Connection` headers to be set manually). A minimal
+`Caddyfile`:
 
 ```
 replay.exemplo.com {
@@ -165,14 +171,14 @@ replay.exemplo.com {
 }
 ```
 
-Suba o app com `BEHIND_PROXY=1 PUBLIC_URL=https://replay.exemplo.com PORT=8080` no ambiente (veja
-a nota de Docker abaixo) e rode o Caddy na mesma máquina (ou num container ao lado) apontando para
-essa mesma porta.
+Start the app with `BEHIND_PROXY=1 PUBLIC_URL=https://replay.exemplo.com PORT=8080` in the
+environment (see the Docker note below) and run Caddy on the same machine (or in a container
+alongside it) pointing to that same port.
 
 ### Docker
 
-No `docker-compose.yml`, publique só a porta HTTP (quem fica público é o proxy, não o app) e passe
-as três variáveis nesse serviço:
+In `docker-compose.yml`, publish only the HTTP port (the proxy is what's public, not the app) and
+pass the three variables to that service:
 
 ```yaml
 services:
@@ -189,95 +195,97 @@ services:
     restart: unless-stopped
 ```
 
-### Nota de segurança
+### Security Note
 
-Sendo honesto: o único obstáculo entre um desconhecido na internet e as câmeras/clipes desse
-sistema é a **senha compartilhada** guardada em `data/config.json`. Não existe conta por pessoa,
-convite ou lista de permissões — quem tem a senha (ou consegue adivinhar) vê tudo. Isso é aceitável
-para uso doméstico numa rede fechada (modo LAN), mas expor na internet muda o cálculo de risco.
-Recomendações mínimas antes de expor publicamente:
+To be honest: the only obstacle between a stranger on the internet and this system's
+cameras/clips is the **shared password** stored in `data/config.json`. There's no per-person
+account, invite, or allow-list — whoever has the password (or manages to guess it) sees
+everything. That's acceptable for home use on a closed network (LAN mode), but exposing it to the
+internet changes the risk calculus. Minimum recommendations before exposing it publicly:
 
-- Troque a senha gerada automaticamente por uma forte (edite o campo `password` em
-  `data/config.json` antes de subir, ou pare o container, edite e suba de novo).
-- Sirva **só** HTTPS — é isso que o proxy da seção acima já garante; não exponha a porta `PORT`
-  (HTTP puro) diretamente para a internet, apenas o proxy deve ser público.
-- O rate limit de login confia na **última** entrada do `X-Forwarded-For` (o peer observado
-  diretamente pelo proxy da borda) — seguro com Caddy (descarta o XFF recebido do cliente), nginx
-  (`proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;`, que só anexa) e Cloudflare
-  (idem, append-only). Isso só é seguro se a porta `PORT` não estiver exposta direto à internet
-  (bullet acima) — do contrário um cliente pode falar direto com o app e forjar o XFF livremente.
-- Para um evento privado, considere também restringir por IP na frente, no proxy — por exemplo, no
-  Caddy, com um matcher `remote_ip` bloqueando quem não estiver na lista esperada — em vez de
-  depender só da senha.
+- Replace the auto-generated password with a strong one (edit the `password` field in
+  `data/config.json` before starting it up, or stop the container, edit it, and start it again).
+- Serve **only** HTTPS — that's exactly what the proxy from the section above already guarantees;
+  don't expose the `PORT` port (plain HTTP) directly to the internet, only the proxy should be
+  public.
+- The login rate limit trusts the **last** entry of `X-Forwarded-For` (the peer observed directly
+  by the edge proxy) — safe with Caddy (discards the XFF received from the client), nginx
+  (`proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;`, which only appends), and
+  Cloudflare (same, append-only). This is only safe if the `PORT` port isn't exposed directly to
+  the internet (bullet above) — otherwise a client could talk directly to the app and forge the
+  XFF freely.
+- For a private event, also consider restricting by IP up front, in the proxy — for example, in
+  Caddy, with a `remote_ip` matcher blocking anyone not on the expected list — instead of relying
+  on the password alone.
 
-As instruções de modo LAN (rede local, sem proxy) continuam valendo normalmente e são o padrão sem
-nenhuma variável nova — veja [Como iniciar](#como-iniciar) e [Configuração](#configuração). O modo
-proxy é só opt-in via `BEHIND_PROXY`.
+The LAN mode instructions (local network, no proxy) still apply as normal and remain the default
+with no new variables — see [Getting Started](#getting-started) and
+[Configuration](#configuration). Proxy mode is opt-in only, via `BEHIND_PROXY`.
 
-## Desenvolvimento
+## Development
 
 ```bash
-bun install       # instala as dependências
-bun run dev       # sobe o servidor local (bun run src/server/index.ts) — exige ffmpeg/openssl no PATH
-bun test          # roda a suíte unit + integration (tests/unit e tests/integration)
-bun run test:e2e  # Playwright: fluxo completo num Chromium com câmera fake
-bun run format    # aplica a formatação do Biome no projeto (biome format --write .)
+bun install       # installs dependencies
+bun run dev       # starts the local server (bun run src/server/index.ts) — requires ffmpeg/openssl on PATH
+bun test          # runs the unit + integration suite (tests/unit and tests/integration)
+bun run test:e2e  # Playwright: full flow in a Chromium browser with a fake camera
+bun run format    # applies Biome formatting to the project (biome format --write .)
 ```
 
-> **Nota honesta sobre o e2e:** `bun run test:e2e` precisa de um navegador Chromium real com
-> suporte a `--use-fake-device-for-media-stream` completando a captura de mídia fake — isso
-> funciona de forma confiável em CI Linux padrão (ex.: GitHub Actions `ubuntu-latest`), mas nem
-> todo ambiente sandboxed/headless consegue completar esse handshake de câmera (observado em
-> alguns sandboxes macOS). Se `#conn-text` ficar travado em "Desconectado" e o teste estourar por
-> timeout na etapa de câmera, é esse limite do ambiente — não um defeito do app. Rode em uma
-> máquina/CI onde a câmera fake realmente é concedida para validar o fluxo ponta a ponta.
+> **Honest note about e2e:** `bun run test:e2e` needs a real Chromium browser that can complete
+> fake media capture via `--use-fake-device-for-media-stream` — this works reliably on standard
+> Linux CI (e.g., GitHub Actions `ubuntu-latest`), but not every sandboxed/headless environment
+> can complete this camera handshake (observed in some macOS sandboxes). If `#conn-text` gets
+> stuck on "Desconectado" and the test times out at the camera step, that's this environment's
+> limitation — not a bug in the app. Run it on a machine/CI where the fake camera is actually
+> granted, to validate the end-to-end flow.
 
-## Checklist de quadra
+## Court Checklist
 
-Validação manual recomendada antes de contar com o sistema num jogo de verdade:
+Manual validation recommended before relying on the system for a real game:
 
-- [ ] 2 celulares (câmeras) na tomada
-- [ ] Wake lock ativo em cada câmera — tela acesa, sem apagar durante a sessão
-- [ ] 5 lances gravados em sequência
-- [ ] Conferência de todos os 5 na galeria (`/clips`) — combinado + ângulos individuais abrem e
-      tocam
-- [ ] Teste de queda de Wi-Fi de uma câmera: desligar o Wi-Fi de um aparelho no meio da sessão,
-      confirmar que ela some da lista em `/control`, e que um lance gravado nesse intervalo ainda
-      sai (com o ângulo restante); reativar o Wi-Fi e confirmar que a câmera reconecta sozinha
+- [ ] 2 phones (cameras) plugged in
+- [ ] Wake lock active on each camera — screen on, not dimming during the session
+- [ ] 5 plays recorded in a row
+- [ ] Check all 5 in the gallery (`/clips`) — combined + individual angles open and play
+- [ ] Wi-Fi drop test on one camera: turn off Wi-Fi on one device mid-session, confirm it
+      disappears from the list in `/control`, and that a play recorded during that gap still comes
+      out (with the remaining angle); turn Wi-Fi back on and confirm the camera reconnects on its
+      own
 
-## Nota de performance
+## Performance Note
 
-Dentro do Docker no Mac, o FFmpeg codifica **por software** — a VM Linux do Docker não acessa o
-media engine do Apple Silicon. Em 1080p60, um lance de 2 ângulos × 20s leva cerca de **30–60s**
-para processar. Se precisar de mais velocidade, rode fora do container: `bun run dev` nativo (com
-`ffmpeg` do Homebrew, que usa VideoToolbox) fica **5–10× mais rápido** — o comportamento é
-idêntico nos dois modos, só muda a velocidade de encoding.
+Inside Docker on a Mac, FFmpeg encodes **in software** — Docker's Linux VM can't access the Apple
+Silicon media engine. At 1080p60, a play with 2 angles × 20s takes about **30–60s** to process. If
+you need more speed, run outside the container: native `bun run dev` (with Homebrew's `ffmpeg`,
+which uses VideoToolbox) is **5–10× faster** — the behavior is identical in both modes, only the
+encoding speed changes.
 
-## Estrutura dos dados
+## Data Structure
 
-Tudo em `data/` (volume mapeado pelo `docker-compose.yml`; sem banco de dados):
+Everything under `data/` (a volume mapped by `docker-compose.yml`; no database):
 
 ```
 data/
-├── config.json           # senha, duração do clipe, layout, resolução/fps alvo, retenção
-├── session-secret        # chave usada para assinar o cookie de sessão
-├── certs/                 # certificado autoassinado (gerado no 1º boot; regenerado se HOST_LAN_IP mudar)
+├── config.json           # password, clip duration, layout, target resolution/fps, retention
+├── session-secret        # key used to sign the session cookie
+├── certs/                 # self-signed certificate (generated on first boot; regenerated if HOST_LAN_IP changes)
 │   ├── cert.pem
 │   └── key.pem
 └── clips/2026-07-17/clip-042/
     ├── combined.mp4
-    ├── angle-fundo.mp4     # nome do ângulo vem do apelido dado na câmera (slugificado)
+    ├── angle-fundo.mp4     # angle name comes from the nickname given on the camera (slugified)
     ├── angle-lateral.mp4
-    └── meta.json           # T, janela, câmeras, layout, duração, erros parciais
+    └── meta.json           # T, window, cameras, layout, duration, partial errors
 ```
 
-## Solução de problemas
+## Troubleshooting
 
-| Situação | Comportamento esperado |
+| Situation | Expected behavior |
 |---|---|
-| Câmera perde Wi-Fi / aba suspensa | Some da lista em `/control` em ~10s (heartbeat a cada 3s, considerada offline após 10s sem sinal); ao voltar, reconecta e reinicia o buffer sozinha |
-| GRAVAR sem nenhuma câmera online | Botão fica desabilitado, com aviso |
-| Upload de uma câmera falha | 3 tentativas com backoff; o lance ainda fecha com os ângulos que chegaram dentro do timeout de 30s |
-| FFmpeg falha num ângulo | Publica os ângulos que deram certo; erro registrado em `meta.json` e no log do servidor |
-| Disco com menos de 5 GB livres | Aviso aparece em `/control` e `/clips` |
-| Duplo toque em GRAVAR | Cooldown de 2s no servidor evita lance duplicado |
+| Camera loses Wi-Fi / tab suspended | Disappears from the list in `/control` within ~10s (heartbeat every 3s, considered offline after 10s with no signal); when it comes back, it reconnects and restarts its buffer on its own |
+| GRAVAR with no camera online | Button is disabled, with a warning |
+| One camera's upload fails | 3 attempts with backoff; the play still closes with whichever angles arrived within the 30s timeout |
+| FFmpeg fails on one angle | Publishes the angles that succeeded; error logged in `meta.json` and in the server log |
+| Disk has less than 5 GB free | Warning appears in `/control` and `/clips` |
+| Double-tap on GRAVAR | 2s server-side cooldown prevents a duplicate play |
