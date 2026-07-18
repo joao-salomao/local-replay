@@ -1,4 +1,5 @@
 import { api } from "../shared/api";
+import { esc } from "../shared/esc";
 
 /**
  * Clips gallery page: polls `/api/clips` + `/api/state` every 10s and renders a card per
@@ -18,11 +19,6 @@ type ClipEntry = {
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const time = (ms: number) =>
   new Date(ms).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-const esc = (s: string) =>
-  s.replace(
-    /[&<>"']/g,
-    (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]!,
-  );
 
 let lastSignature = "";
 

@@ -1,5 +1,6 @@
 import type { CameraInfo, JobStatus, LogEntry, ServerMessage } from "../../shared/protocol";
 import { api } from "../shared/api";
+import { esc } from "../shared/esc";
 import { WsClient } from "../shared/ws-client";
 
 /**
@@ -16,12 +17,6 @@ type State = {
 };
 const DURATIONS = [10, 20, 30, 45, 60];
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
-
-const esc = (s: string) =>
-  s.replace(
-    /[&<>"']/g,
-    (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]!,
-  );
 
 /** Maps a job's lifecycle state (see `protocol.ts#JobState`) to its pt-BR display label. */
 function jobLabel(job: JobStatus): string {
