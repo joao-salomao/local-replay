@@ -240,6 +240,80 @@ describe("processClip", () => {
     expect(combined.hasVideo).toBe(true);
   }, 180_000);
 
+  it("an angle whose buffer mixes an audio-only segment and a video segment keeps the video segment (no ffmpeg crash)", async () => {
+    // The camera buffers the previous + current recording cycle (see camera.ts#startCycle). If
+    // the phone was locked for part of that window, one buffered file is audio-only (locked) and
+    // the other has video (unlocked) — unlike the fully-locked tests above, this angle has SOME
+    // video and must not be dropped wholesale. Audio-only FIRST is the order that breaks the
+    // ffmpeg concat demuxer, which exposes only the first input's streams: OR-accumulating
+    // `hasVideo` across files lets this angle through to ffmpeg, which then fails `-map 0:v:0`
+    // against a concat stream layout with no video at all.
+    const clipDir = mkdtempSync(join(tmpdir(), "replay-clip-"));
+    mkdirSync(join(clipDir, "raw"), { recursive: true });
+    const result = await processClip({
+      clipDir,
+      t: 100_000,
+      windowSec: 10,
+      config,
+      angles: [
+        {
+          name: "iPhone",
+          slug: "iphone",
+          files: [
+            { path: rawAudioOnly, startMs: 84_000 }, // locked: audio-only, first in the list
+            { path: rawA1, startMs: 92_200 }, // unlocked: has video
+          ],
+        },
+      ],
+    });
+    expect(result.errors).toEqual([]);
+    expect(Object.keys(result.outputs.angles)).toEqual(["iphone"]);
+    expect(result.outputs.combined).toBe("combined.mp4");
+    expect(existsSync(join(clipDir, "combined.mp4"))).toBe(true);
+
+    const angle = await probe(join(clipDir, "angle-iphone.mp4"));
+    expect(angle.hasVideo).toBe(true);
+    // window is [90s,100s]; only the video segment (starts 92.2s) is kept, so the cut is a
+    // shorter ~7.8s rather than the full 10s — plausible and non-zero, not the full window.
+    expect(angle.durationSec).toBeGreaterThan(7);
+    expect(angle.durationSec).toBeLessThan(8.5);
+  }, 180_000);
+
+  it("an angle whose buffer mixes a video segment then an audio-only segment keeps the video segment (no ffmpeg crash)", async () => {
+    // Reverse order from the test above: video first, audio-only (locked) last. The concat
+    // demuxer's first-file-streams behavior means this breaks a DIFFERENT map (`-map 0:a:0`,
+    // since OR'd hasAudio is true from the audio-only file but the concat layout — taken from the
+    // video-only first file — has no audio stream at all).
+    const clipDir = mkdtempSync(join(tmpdir(), "replay-clip-"));
+    mkdirSync(join(clipDir, "raw"), { recursive: true });
+    const result = await processClip({
+      clipDir,
+      t: 100_000,
+      windowSec: 10,
+      config,
+      angles: [
+        {
+          name: "iPhone",
+          slug: "iphone",
+          files: [
+            { path: rawB0, startMs: 84_000 }, // unlocked: has video
+            { path: rawAudioOnly, startMs: 96_000 }, // locked: audio-only, last in the list
+          ],
+        },
+      ],
+    });
+    expect(result.errors).toEqual([]);
+    expect(Object.keys(result.outputs.angles)).toEqual(["iphone"]);
+    expect(result.outputs.combined).toBe("combined.mp4");
+    expect(existsSync(join(clipDir, "combined.mp4"))).toBe(true);
+
+    const angle = await probe(join(clipDir, "angle-iphone.mp4"));
+    expect(angle.hasVideo).toBe(true);
+    // window is [90s,100s]; only the video segment (84s-96s) is kept, so the cut is [90s,96s) → 6s.
+    expect(angle.durationSec).toBeGreaterThan(5.5);
+    expect(angle.durationSec).toBeLessThan(6.5);
+  }, 180_000);
+
   it("all cameras locked → job error, readable message, no combined", async () => {
     const clipDir = mkdtempSync(join(tmpdir(), "replay-clip-"));
     mkdirSync(join(clipDir, "raw"), { recursive: true });

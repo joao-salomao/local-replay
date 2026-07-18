@@ -43,12 +43,14 @@ export function slugify(name: string): string {
  * failure is recorded in `errors` while the other angles still proceed \u2014 partial success (some
  * angles ready, others failed) is a first-class outcome here, surfaced by the caller
  * (`clip-job.ts`) as `state: "ready"` with `errors` populated, as long as at least one output
- * exists. This is also how a locked phone camera is handled: if none of an angle's probed files
- * have a video stream (iOS suspends the camera while keeping the mic live), that angle is failed
- * with a readable "no video stream" error instead of being handed to ffmpeg \u2014 the other angles
- * still produce `combined.mp4`. If every angle lacks video, `anglePaths` ends up empty and
- * `outputs.combined` stays `null`, so the job surfaces as an error with per-angle messages
- * instead of an ffmpeg stderr dump.
+ * exists. This is also how a locked phone camera is handled: an angle's probed files are filtered
+ * down to only those with a video stream (iOS suspends the camera while keeping the mic live, so
+ * a locked segment is audio-only) before anything is handed to ffmpeg \u2014 a phone locked for only
+ * part of the buffered window still contributes its video segment(s), and only a *fully* locked
+ * angle (zero video files) is failed, with a readable "no video stream" error, instead of being
+ * handed to ffmpeg \u2014 the other angles still produce `combined.mp4`. If every angle lacks video,
+ * `anglePaths` ends up empty and `outputs.combined` stays `null`, so the job surfaces as an error
+ * with per-angle messages instead of an ffmpeg stderr dump.
  */
 export async function processClip(o: {
   clipDir: string;
@@ -74,33 +76,44 @@ export async function processClip(o: {
       usedSlugs.add(uniqueSlug);
 
       const probed = [];
-      let hasAudio = false;
-      let hasVideo = false;
       for (const f of angle.files) {
         const info = await probe(f.path);
-        probed.push({ path: f.path, startMs: f.startMs, durationMs: info.durationSec * 1000 });
-        hasAudio = hasAudio || info.hasAudio;
-        hasVideo = hasVideo || info.hasVideo;
+        probed.push({
+          path: f.path,
+          startMs: f.startMs,
+          durationMs: info.durationSec * 1000,
+          hasVideo: info.hasVideo,
+          hasAudio: info.hasAudio,
+        });
       }
       // A locked iOS phone suspends its camera's video track while the mic keeps recording, so
-      // the upload can be audio-only. Bail out before ffmpeg does — normalizeCutArgs's
-      // `-map 0:v:0` would otherwise fail with a cryptic "Stream map '' matches no streams"
-      // dump. Skipping here just fails this one angle (caught below like any other angle
-      // failure), so the clip still comes out fine as long as another angle has video.
-      if (!hasVideo) throw new Error("no video stream (camera locked or in background?)");
-      const cut = computeCutWindow(probed, windowStartMs, t);
+      // the upload can be audio-only. The camera buffers the previous + current recording cycle
+      // (2 files — see camera.ts#startCycle), so a phone locked for only PART of that window
+      // produces a MIX: one audio-only file and one video file for the same angle. Filtering down
+      // to only the video-bearing files (rather than OR-accumulating a single hasVideo flag
+      // across the whole angle) keeps the good segment(s) instead of dropping the angle — and it
+      // structurally avoids ever handing ffmpeg a concat list containing a non-video file: the
+      // concat demuxer exposes only the FIRST input's stream layout, so a mixed list can fail
+      // normalizeCutArgs's `-map 0:v:0` (or `-map 0:a:0`) with a cryptic "Stream map '' matches no
+      // streams" dump even though some file in the list does have video. A fully-locked angle
+      // (every file audio-only) still bails out here with the same readable error as before.
+      const videoFiles = probed.filter((p) => p.hasVideo);
+      if (videoFiles.length === 0)
+        throw new Error("no video stream (camera locked or in background?)");
+      const hasAudio = videoFiles.some((p) => p.hasAudio);
+      const cut = computeCutWindow(videoFiles, windowStartMs, t);
       if (cut.durationSec < 0.5) throw new Error("window not covered by uploaded files");
 
       let listFile: string | null = null;
       let input: string | null = null;
-      if (probed.length > 1) {
+      if (videoFiles.length > 1) {
         listFile = join(clipDir, "raw", `${uniqueSlug}-list.txt`);
         writeConcatList(
-          probed.map((p) => p.path),
+          videoFiles.map((p) => p.path),
           listFile,
         );
       } else {
-        input = probed[0]!.path;
+        input = videoFiles[0]!.path;
       }
       const outName = `angle-${uniqueSlug}.mp4`;
       const cutArgs = normalizeCutArgs({
@@ -122,7 +135,7 @@ export async function processClip(o: {
       cameras.push({
         name: angle.name,
         slug: uniqueSlug,
-        files: probed.map(({ startMs, durationMs }) => ({ startMs, durationMs })),
+        files: videoFiles.map(({ startMs, durationMs }) => ({ startMs, durationMs })),
       });
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
