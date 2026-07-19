@@ -142,8 +142,8 @@ defaults shown; no env for these):
 | Setting | Default | Description |
 |---|---|---|
 | Clip duration | `20s` | Clip length for a play (5–60s, capped by `CLIP_DURATION_MAX_SECONDS`). |
-| Buffer margin | `5s` | Extra seconds each camera buffers *beyond* the clip duration — the safety slack the server reaches into to recover MediaRecorder rotation gaps (0–60s; never added to the final clip). |
-| Upload timeout | `30s` | How long the server waits for cameras to finish uploading a triggered play before finalizing with whatever arrived (10–300s). Raise it for slow/flaky Wi‑Fi so a lagging camera's angle still makes it in. |
+| Buffer margin | `5s` | Extra seconds each camera keeps buffered *beyond* the clip duration — the safety slack the server reaches back into to recover the sub-second gaps MediaRecorder leaves between recording cycles (prevents short clips, e.g. 9.6s for a requested 10s). Range 0–60s; these seconds never make it into the final clip, and this setting does **not** help with slow uploads. |
+| Upload timeout | `30s` | How long the server waits for the cameras to finish uploading a triggered play before finalizing it with whatever arrived (10–300s). This — not the buffer margin — is the lever for slow/flaky Wi‑Fi: raise it so a lagging camera's angle still makes it into the play instead of being dropped. |
 | Combined audio | *automatic* | Which camera's audio the side-by-side grid uses (by display name); automatic = the first angle. |
 | Capture res/fps | `1920×1080@60` | Resolution/fps the phones request from getUserMedia (as *ideal* — each device settles on the closest it supports; connected cameras re-acquire on change). Separate from `TARGET_*`; lower it to ease weak or overheating phones. |
 

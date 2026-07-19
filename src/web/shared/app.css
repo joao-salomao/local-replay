@@ -190,6 +190,74 @@ a:focus-visible {
   outline-offset: 2px;
 }
 
+/* ---------- Field row + info tooltip (control page) ---------- */
+
+/* Two settings side by side; each column stacks its label over its input. */
+.field-row {
+  display: flex;
+  gap: var(--space-3);
+}
+.field-row .field {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+/* Small "i" affordance that reveals a detailed tooltip on hover or keyboard/tap focus (focusable so
+ * it works without a mouse — the only way to see it on touch). */
+.hint {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.05rem;
+  height: 1.05rem;
+  /* Reset the base <button> rule (full-width, tall, green, padded). NB: a plain `.info` would also
+   * collect `button.info`'s blue fill, hence the distinct class name. */
+  min-height: 0;
+  padding: 0;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  background: none;
+  color: var(--color-text-muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+  font-style: italic;
+  line-height: 1;
+  cursor: help;
+  vertical-align: middle;
+  position: relative;
+}
+.hint-tip {
+  position: absolute;
+  bottom: calc(100% + 0.5rem);
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: min(230px, 80vw);
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-3);
+  color: var(--color-text);
+  font-size: 0.8rem;
+  font-weight: 400;
+  font-style: normal;
+  line-height: 1.4;
+  text-align: left;
+  box-shadow: var(--shadow-card);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.12s ease;
+  z-index: 20;
+}
+.hint:hover .hint-tip,
+.hint:focus .hint-tip,
+.hint:focus-visible .hint-tip {
+  opacity: 1;
+  visibility: visible;
+}
+
 /* ---------- Buttons ---------- */
 
 button {
