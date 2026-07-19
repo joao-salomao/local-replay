@@ -25,10 +25,10 @@
         <select id="audio-source" aria-label="Câmera de áudio do vídeo combinado"></select>
         <p class="muted">Resolução / FPS de captura</p>
         <select id="capture-preset" aria-label="Resolução e FPS de captura das câmeras"></select>
-        <p class="muted">Buffer extra da câmera</p>
-        <select id="buffer-margin" aria-label="Segundos extras que a câmera bufferiza além da duração do clipe"></select>
-        <p class="muted">Espera de upload (servidor)</p>
-        <select id="upload-timeout" aria-label="Tempo que o servidor espera os uploads antes de fechar o lance"></select>
+        <p class="muted">Buffer extra da câmera (segundos)</p>
+        <input type="number" id="buffer-margin" min="0" max="60" step="1" inputmode="numeric" aria-label="Segundos extras que a câmera bufferiza além da duração do clipe" />
+        <p class="muted">Espera de upload do servidor (segundos)</p>
+        <input type="number" id="upload-timeout" min="10" max="300" step="1" inputmode="numeric" aria-label="Tempo em segundos que o servidor espera os uploads antes de fechar o lance" />
       </div>
       <div class="card card-jobs">
         <p class="muted">Últimos lances</p>

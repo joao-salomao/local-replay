@@ -22,19 +22,12 @@ type State = {
   freeDiskGB?: number | null;
 };
 const DURATIONS = [10, 20, 30, 45, 60];
-const BUFFER_MARGIN_OPTIONS = [0, 3, 5, 10, 15];
-const UPLOAD_TIMEOUT_OPTIONS = [30, 45, 60, 90, 120, 180];
 
-/** Builds `<option>`s for a seconds-valued picker: the preset list, plus — if the current server
- * value isn't one of them (e.g. an env-set value) — a selected option for it so the picker still
- * reflects reality. Values are plain integers, so no escaping is needed (see the capture preset). */
-function secondsSelect(options: number[], current: number): string {
-  const custom = options.includes(current)
-    ? ""
-    : `<option value="${current}" selected>${current}s</option>`;
-  return `${custom}${options
-    .map((n) => `<option value="${n}"${n === current ? " selected" : ""}>${n}s</option>`)
-    .join("")}`;
+/** Reflects a server value into a number input, but leaves it alone while the operator is editing it
+ * (a state broadcast mid-typing must not clobber the field). */
+function syncNumberInput(id: string, value: number): void {
+  const el = $<HTMLInputElement>(id);
+  if (document.activeElement !== el) el.value = String(value);
 }
 
 /** Maps a job's lifecycle state (see `protocol.ts#JobState`) to its pt-BR display label. */
@@ -132,8 +125,8 @@ function render(): void {
     : `<option value="${curCap}" selected disabled>Atual (${state.capture.width}×${state.capture.height}@${state.capture.fps})</option>`;
   $("capture-preset").innerHTML = customOpt + presetOpts;
   // Extra buffer (camera-side) and upload timeout (server-side) — the two knobs against slow uploads.
-  $("buffer-margin").innerHTML = secondsSelect(BUFFER_MARGIN_OPTIONS, state.bufferMarginSeconds);
-  $("upload-timeout").innerHTML = secondsSelect(UPLOAD_TIMEOUT_OPTIONS, state.uploadTimeoutSeconds);
+  syncNumberInput("buffer-margin", state.bufferMarginSeconds);
+  syncNumberInput("upload-timeout", state.uploadTimeoutSeconds);
   $("jobs").innerHTML = state.jobs
     .slice(0, 5)
     .map(
@@ -170,14 +163,17 @@ $<HTMLSelectElement>("capture-preset").onchange = async (e) => {
   });
 };
 
-// Wired once (see the audio-source note). Both are plain integer-seconds settings the server persists.
-$<HTMLSelectElement>("buffer-margin").onchange = async (e) => {
-  const seconds = Number((e.target as HTMLSelectElement).value);
+// Wired once. Number inputs (integer seconds); the range guards mirror the server's so an
+// out-of-range entry doesn't fire a doomed request — the next state broadcast resets the field.
+$<HTMLInputElement>("buffer-margin").onchange = async (e) => {
+  const seconds = Number((e.target as HTMLInputElement).value);
+  if (!Number.isInteger(seconds) || seconds < 0 || seconds > 60) return;
   await api("/api/config/buffer-margin", { method: "POST", body: JSON.stringify({ seconds }) });
 };
 
-$<HTMLSelectElement>("upload-timeout").onchange = async (e) => {
-  const seconds = Number((e.target as HTMLSelectElement).value);
+$<HTMLInputElement>("upload-timeout").onchange = async (e) => {
+  const seconds = Number((e.target as HTMLInputElement).value);
+  if (!Number.isInteger(seconds) || seconds < 10 || seconds > 300) return;
   await api("/api/config/upload-timeout", { method: "POST", body: JSON.stringify({ seconds }) });
 };
 
