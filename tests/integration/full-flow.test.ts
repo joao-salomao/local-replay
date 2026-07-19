@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it, setDefaultTimeout } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { probe, runFfmpeg } from "@server/ffmpeg";
@@ -18,6 +18,9 @@ const sims: CameraSimulator[] = [];
 
 beforeAll(async () => {
   dataDir = mkdtempSync(join(tmpdir(), "replay-flow-"));
+  // Clip duration is a UI-managed setting now (no env) — seed the 10s the duration assertion below
+  // expects via config.json, which ConfigStore.load reads on boot.
+  writeFileSync(join(dataDir, "config.json"), JSON.stringify({ clipDurationSeconds: 10 }));
   app = await createAppForTest(
     dataDir,
     { cooldownMs: 0 },
@@ -25,7 +28,6 @@ beforeAll(async () => {
       env: {
         PASSWORD: "senha",
         SESSION_SECRET: "s",
-        CLIP_DURATION_SECONDS: "10",
         // small target: keeps the real-ffmpeg full flow fast (see pipeline.test.ts's config)
         TARGET_HEIGHT: "180",
         TARGET_FPS: "15",

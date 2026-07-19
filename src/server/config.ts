@@ -4,12 +4,13 @@ import { BUFFER_MARGIN_SECONDS } from "@shared/buffer-window";
 import { isCapturePreset } from "@shared/capture-presets";
 
 /**
- * Server configuration. Static settings (the required secrets, size/retention limits, target output)
- * come from environment variables (see `.env.example`). The runtime-adjustable settings — the ones
- * the control page can change live — additionally PERSIST to `<DATA_DIR>/config.json`: the env value
- * is only the first-run default, and once a value is changed live it survives restarts (the file
- * wins over the env). `PASSWORD` and `SESSION_SECRET` are required (the server refuses to boot
- * without them) and are never written to that file — they stay env-only.
+ * Server configuration comes from two places. Static settings (the required secrets, the size and
+ * retention limits, the target output) are read from environment variables (see `.env.example`).
+ * The UI-managed settings — the ones the control page changes live (clip duration, audio source,
+ * capture res/fps, buffer margin, upload timeout) — have NO env: they default to the built-in
+ * `DEFAULT_CONFIG` values and PERSIST to `<DATA_DIR>/config.json`, so a live change survives a
+ * restart (the file wins over the code default). `PASSWORD` and `SESSION_SECRET` are required (the
+ * server refuses to boot without them) and are never written to that file — they stay env-only.
  */
 
 export type Config = {
@@ -17,8 +18,8 @@ export type Config = {
   /** HMAC secret used to sign session cookies (`auth.ts`). Required like `password`: keeping it
    * stable across restarts is what keeps existing sessions valid, so set a fixed value in `.env`. */
   sessionSecret: string;
-  /** Current per-clip capture window, seconds. First-run default from `CLIP_DURATION_SECONDS`;
-   * changed live via the control page and persisted to `config.json`. */
+  /** Current per-clip capture window, seconds. Defaults to the built-in `DEFAULT_CONFIG` value;
+   * changed live via the control page and persisted to `config.json` (no env). */
   clipDurationSeconds: number;
   /** Upper bound accepted by `setClipDuration`. */
   clipDurationMaxSeconds: number;
@@ -26,23 +27,23 @@ export type Config = {
   bufferCycleMinSeconds: number;
   /** Extra seconds the cameras buffer BEYOND `clipDurationSeconds` (`buffer-window.ts#cycleSeconds`)
    * — the safety slack `computeCutWindow` reaches into to recover MediaRecorder rotation gaps.
-   * First-run default from `BUFFER_MARGIN_SECONDS`; changed live and persisted. */
+   * Defaults to the `BUFFER_MARGIN_SECONDS` constant; changed live and persisted (no env). */
   bufferMarginSeconds: number;
   /** How long the server waits (seconds) for cameras to finish uploading a triggered clip before
    * finalizing it with whatever arrived (`clip-job.ts`). Raise it for slow/flaky Wi‑Fi so a lagging
-   * camera's angle still makes it in. First-run default from `UPLOAD_TIMEOUT_SECONDS`; persisted. */
+   * camera's angle still makes it in. Defaults in code; changed live and persisted (no env). */
   uploadTimeoutSeconds: number;
   /** Display name of the camera whose audio track the simultaneous side-by-side combine uses
    * (`pipeline.ts` maps that angle's audio; the sequential combine keeps each segment's own audio).
-   * `null` = automatic: the first angle's audio. First-run default from `AUDIO_SOURCE_NAME`; changed
-   * live via the control page and persisted. */
+   * `null` = automatic: the first angle's audio. Defaults to `null`; changed live via the control
+   * page and persisted (no env). */
   audioSourceName: string | null;
   targetHeight: number;
   targetFps: number;
   /** Capture resolution/fps the cameras REQUEST from getUserMedia (as `ideal`; the device picks the
    * closest it actually supports). Separate from the target above (the server's normalized output) —
-   * lower these to ease weak or overheating phones. First-run default from `CAPTURE_*`; changed live
-   * from the control page and persisted (see `setCapture`). */
+   * lower these to ease weak or overheating phones. Defaults in code; changed live from the control
+   * page and persisted (no env — see `setCapture`). */
   captureWidth: number;
   captureHeight: number;
   captureFps: number;
@@ -153,17 +154,10 @@ export class ConfigStore {
       throw new Error("SESSION_SECRET is required — set it in your .env (see .env.example).");
     }
 
-    const liveDefaults: LiveConfig = {
-      clipDurationSeconds: numEnv(env.CLIP_DURATION_SECONDS, DEFAULT_CONFIG.clipDurationSeconds),
-      audioSourceName: env.AUDIO_SOURCE_NAME?.trim() || null,
-      captureWidth: numEnv(env.CAPTURE_WIDTH, DEFAULT_CONFIG.captureWidth),
-      captureHeight: numEnv(env.CAPTURE_HEIGHT, DEFAULT_CONFIG.captureHeight),
-      captureFps: numEnv(env.CAPTURE_FPS, DEFAULT_CONFIG.captureFps),
-      bufferMarginSeconds: numEnv(env.BUFFER_MARGIN_SECONDS, DEFAULT_CONFIG.bufferMarginSeconds),
-      uploadTimeoutSeconds: numEnv(env.UPLOAD_TIMEOUT_SECONDS, DEFAULT_CONFIG.uploadTimeoutSeconds),
-    };
+    // UI-managed settings have no env: their first-run default is the built-in DEFAULT_CONFIG value,
+    // which config.json (written by the control-page setters below) then overrides field by field.
     const configPath = join(dataDir, "config.json");
-    const live = pickLive(readLiveFile(configPath), liveDefaults);
+    const live = pickLive(readLiveFile(configPath), DEFAULT_CONFIG);
 
     const retention = env.RETENTION_DAYS?.trim();
     return new ConfigStore(configPath, {

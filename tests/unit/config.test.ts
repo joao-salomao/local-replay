@@ -34,77 +34,81 @@ describe("ConfigStore.load", () => {
     expect(c.retentionDays).toBeNull();
   });
 
-  it("reads and trims overrides from the environment", () => {
+  it("reads and trims the static (non-UI) settings from the environment", () => {
     const c = ConfigStore.load(freshDir(), {
       PASSWORD: "  secret  ",
       SESSION_SECRET: "  sess  ",
-      CLIP_DURATION_SECONDS: "30",
       CLIP_DURATION_MAX_SECONDS: "90",
       BUFFER_CYCLE_MIN_SECONDS: "45",
-      AUDIO_SOURCE_NAME: "  Fundo  ",
       TARGET_HEIGHT: "720",
       TARGET_FPS: "30",
+      RETENTION_DAYS: "14",
+    }).value;
+    expect(c.password).toBe("secret");
+    expect(c.sessionSecret).toBe("sess");
+    expect(c.clipDurationMaxSeconds).toBe(90);
+    expect(c.bufferCycleMinSeconds).toBe(45);
+    expect(c.targetHeight).toBe(720);
+    expect(c.targetFps).toBe(30);
+    expect(c.retentionDays).toBe(14);
+  });
+
+  it("ignores env vars for the UI-managed settings — they default in code, config.json then wins", () => {
+    // These settings are managed on /control and persisted to config.json; there's deliberately no
+    // env for any of them, so setting one has no effect — the built-in DEFAULT_CONFIG value stands.
+    const c = ConfigStore.load(freshDir(), {
+      ...secrets,
+      CLIP_DURATION_SECONDS: "30",
+      AUDIO_SOURCE_NAME: "Fundo",
       CAPTURE_WIDTH: "1280",
       CAPTURE_HEIGHT: "720",
       CAPTURE_FPS: "24",
       BUFFER_MARGIN_SECONDS: "8",
       UPLOAD_TIMEOUT_SECONDS: "45",
-      RETENTION_DAYS: "14",
-    }).value;
-    expect(c.password).toBe("secret");
-    expect(c.sessionSecret).toBe("sess");
-    expect(c.clipDurationSeconds).toBe(30);
-    expect(c.clipDurationMaxSeconds).toBe(90);
-    expect(c.bufferCycleMinSeconds).toBe(45);
-    expect(c.audioSourceName).toBe("Fundo");
-    expect(c.targetHeight).toBe(720);
-    expect(c.targetFps).toBe(30);
-    expect(c.captureWidth).toBe(1280);
-    expect(c.captureHeight).toBe(720);
-    expect(c.captureFps).toBe(24);
-    expect(c.bufferMarginSeconds).toBe(8);
-    expect(c.uploadTimeoutSeconds).toBe(45);
-    expect(c.retentionDays).toBe(14);
-  });
-
-  it("falls back to defaults on unparseable numerics and treats a blank AUDIO_SOURCE_NAME as null", () => {
-    const c = ConfigStore.load(freshDir(), {
-      ...secrets,
-      CLIP_DURATION_SECONDS: "abc", // invalid -> default
-      AUDIO_SOURCE_NAME: "   ", // blank -> null (automatic)
-      RETENTION_DAYS: "not-a-number", // invalid -> null (keep forever)
     }).value;
     expect(c.clipDurationSeconds).toBe(DEFAULT_CONFIG.clipDurationSeconds);
-    expect(c.audioSourceName).toBeNull();
+    expect(c.audioSourceName).toBe(DEFAULT_CONFIG.audioSourceName);
+    expect(c.captureWidth).toBe(DEFAULT_CONFIG.captureWidth);
+    expect(c.captureHeight).toBe(DEFAULT_CONFIG.captureHeight);
+    expect(c.captureFps).toBe(DEFAULT_CONFIG.captureFps);
+    expect(c.bufferMarginSeconds).toBe(DEFAULT_CONFIG.bufferMarginSeconds);
+    expect(c.uploadTimeoutSeconds).toBe(DEFAULT_CONFIG.uploadTimeoutSeconds);
+  });
+
+  it("falls back to defaults on unparseable static numerics and treats a bad retention as null", () => {
+    const c = ConfigStore.load(freshDir(), {
+      ...secrets,
+      CLIP_DURATION_MAX_SECONDS: "abc", // invalid -> default
+      RETENTION_DAYS: "not-a-number", // invalid -> null (keep forever)
+    }).value;
+    expect(c.clipDurationMaxSeconds).toBe(DEFAULT_CONFIG.clipDurationMaxSeconds);
     expect(c.retentionDays).toBeNull();
   });
 
-  it("setClipDuration mutates, validates, and persists across a reload (over the env default)", () => {
+  it("setClipDuration mutates, validates, and persists across a reload (over the code default)", () => {
     const dir = freshDir();
-    const env = { ...secrets, CLIP_DURATION_SECONDS: "20" };
-    const store = ConfigStore.load(dir, env);
+    const store = ConfigStore.load(dir, secrets);
     store.setClipDuration(45);
     expect(store.value.clipDurationSeconds).toBe(45);
     expect(() => store.setClipDuration(61)).toThrow(); // > max (60)
     expect(() => store.setClipDuration(4)).toThrow(); // < 5
     expect(() => store.setClipDuration(20.5)).toThrow(); // not an integer
-    // Persisted: a fresh load from the same dir returns 45, overriding the env's 20.
-    expect(ConfigStore.load(dir, env).value.clipDurationSeconds).toBe(45);
+    // Persisted: a fresh load from the same dir returns 45, overriding the code default (20).
+    expect(ConfigStore.load(dir, secrets).value.clipDurationSeconds).toBe(45);
   });
 
   it("setAudioSource mutates, trims, rejects empty/oversized, and persists (string and null)", () => {
     const dir = freshDir();
-    const env = { ...secrets, AUDIO_SOURCE_NAME: "Fundo" };
-    const store = ConfigStore.load(dir, env);
+    const store = ConfigStore.load(dir, secrets);
     store.setAudioSource("  Lateral  ");
     expect(store.value.audioSourceName).toBe("Lateral");
-    expect(ConfigStore.load(dir, env).value.audioSourceName).toBe("Lateral"); // string persisted
+    expect(ConfigStore.load(dir, secrets).value.audioSourceName).toBe("Lateral"); // string persisted
     expect(() => store.setAudioSource("   ")).toThrow(); // empty after trim
     expect(() => store.setAudioSource("x".repeat(201))).toThrow(); // oversized
     store.setAudioSource(null);
     expect(store.value.audioSourceName).toBeNull();
-    // A persisted null must win over the env default "Fundo" on reload — not fall back to it.
-    expect(ConfigStore.load(dir, env).value.audioSourceName).toBeNull();
+    // A persisted null (automatic) is read back as null, not treated as an absent key.
+    expect(ConfigStore.load(dir, secrets).value.audioSourceName).toBeNull();
   });
 
   it("setCapture accepts a known preset, rejects anything else, and persists", () => {
@@ -144,10 +148,10 @@ describe("ConfigStore.load", () => {
     expect(ConfigStore.load(dir, secrets).value.uploadTimeoutSeconds).toBe(90);
   });
 
-  it("ignores a corrupt config.json and falls back to env defaults", () => {
+  it("ignores a corrupt config.json and falls back to the code defaults", () => {
     const dir = freshDir();
     writeFileSync(join(dir, "config.json"), "{ not valid json");
-    const c = ConfigStore.load(dir, { ...secrets, CLIP_DURATION_SECONDS: "25" }).value;
-    expect(c.clipDurationSeconds).toBe(25); // file ignored, env default used
+    const c = ConfigStore.load(dir, secrets).value;
+    expect(c.clipDurationSeconds).toBe(DEFAULT_CONFIG.clipDurationSeconds); // file ignored → default
   });
 });

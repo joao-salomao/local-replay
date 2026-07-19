@@ -17,17 +17,12 @@ services:
       - SESSION_SECRET=${SESSION_SECRET:?SESSION_SECRET is required — set it in .env (see .env.example)}
       - DATA_DIR=${DATA_DIR:-data}
       - LOG_LEVEL=${LOG_LEVEL:-info}
-      - CLIP_DURATION_SECONDS=${CLIP_DURATION_SECONDS:-20}
+      # UI-managed settings (clip duration, audio, capture res/fps, buffer margin, upload timeout) are
+      # not env vars — they persist to <DATA_DIR>/config.json when changed on /control.
       - CLIP_DURATION_MAX_SECONDS=${CLIP_DURATION_MAX_SECONDS:-60}
       - BUFFER_CYCLE_MIN_SECONDS=${BUFFER_CYCLE_MIN_SECONDS:-30}
-      - BUFFER_MARGIN_SECONDS=${BUFFER_MARGIN_SECONDS:-5}
-      - UPLOAD_TIMEOUT_SECONDS=${UPLOAD_TIMEOUT_SECONDS:-30}
-      - AUDIO_SOURCE_NAME=${AUDIO_SOURCE_NAME:-}
       - TARGET_HEIGHT=${TARGET_HEIGHT:-1080}
       - TARGET_FPS=${TARGET_FPS:-60}
-      - CAPTURE_WIDTH=${CAPTURE_WIDTH:-1920}
-      - CAPTURE_HEIGHT=${CAPTURE_HEIGHT:-1080}
-      - CAPTURE_FPS=${CAPTURE_FPS:-60}
       - RETENTION_DAYS=${RETENTION_DAYS:-}
       - HTTPS_PORT=${HTTPS_PORT:-8443}
       - HTTP_PORT=${HTTP_PORT:-8080}

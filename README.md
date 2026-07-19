@@ -107,20 +107,21 @@ warning. That's already enough, including for the WebSocket.
 - Keep the phone plugged in and in the shade: prolonged heat drops the fps and capture quality on
   both platforms.
 - 60fps is the browser's **best effort** — several devices (including iPhones) deliver 30fps even
-  when 60 is requested. The server tells each camera what resolution/fps to request
-  (`CAPTURE_WIDTH`/`CAPTURE_HEIGHT`/`CAPTURE_FPS`) and the device settles on the closest it supports;
+  when 60 is requested. The server tells each camera what resolution/fps to request (set live on
+  `/control`, default 1080p60) and the device settles on the closest it supports;
   the `/camera` page shows what it actually got, updated every 5s. The server's final output is
   conformed separately to `TARGET_HEIGHT`/`TARGET_FPS` (default 1080p60) regardless of the source.
 
 ## Configuration
 
-All configuration is done through **environment variables** (a `.env` file, or the container's
-environment — copy `.env.example` for the full annotated list). The server reads them once at
-startup, so changing one means editing `.env` and restarting — except the handful marked
-*live-adjustable* below (clip duration, combined audio, capture res/fps, buffer margin, upload
-timeout), which can also be changed on `/control`. A live change is saved to
-`<DATA_DIR>/config.json` and **persists across restarts**: that file wins over the `.env` default,
-so the env value is really just the first-run seed (delete `config.json` to fall back to it).
+Configuration splits in two. **Environment variables** (a `.env` file, or the container's
+environment — copy `.env.example` for the full annotated list) hold the static settings: the
+required secrets, the size/retention limits, and the target output. The server reads them once at
+startup, so changing one means editing `.env` and restarting.
+
+The **control-page settings** (second table below) are NOT env vars — they default in code, are
+changed live on `/control`, and each change is saved to `<DATA_DIR>/config.json`, which **persists
+across restarts** (delete that file to reset to the code defaults).
 
 **`PASSWORD` and `SESSION_SECRET` are required** — the server refuses to boot without them, and
 neither is ever written to `config.json` (they stay env-only). Everything else has a default.
@@ -129,16 +130,22 @@ neither is ever written to `config.json` (they stay env-only). Everything else h
 |---|---|---|
 | `PASSWORD` | *(required)* | Shared access password players type to log in. The server won't boot if it's unset. |
 | `SESSION_SECRET` | *(required)* | HMAC key that signs session cookies. Keep it stable across restarts (changing it logs everyone out). `.env.example` ships a working example — generate your own (`openssl rand -hex 32`) before exposing the app to the internet. |
-| `CLIP_DURATION_SECONDS` | `20` | Clip length (seconds) for a play. **Live-adjustable** in `/control` and persisted. |
 | `CLIP_DURATION_MAX_SECONDS` | `60` | Ceiling accepted for the clip duration (the server rejects higher values). |
-| `BUFFER_CYCLE_MIN_SECONDS` | `30` | Minimum duration of each camera's buffer cycle. The actual cycle used is `max(BUFFER_CYCLE_MIN_SECONDS, CLIP_DURATION_SECONDS + BUFFER_MARGIN_SECONDS)` — the extra slack lets the server always cut the **full** requested duration even across a recording-cycle boundary (prevents short clips, e.g. 9.6s for a requested 10s). |
-| `BUFFER_MARGIN_SECONDS` | `5` | Extra seconds each camera buffers *beyond* the clip duration — the safety slack the server reaches into to recover MediaRecorder rotation gaps (never added to the final clip). **Live-adjustable** in `/control` (0–60) and persisted. |
-| `UPLOAD_TIMEOUT_SECONDS` | `30` | How long the server waits for cameras to finish uploading a triggered play before finalizing with whatever arrived. Raise it for slow/flaky Wi‑Fi so a lagging camera's angle still makes it in. **Live-adjustable** in `/control` (10–300) and persisted. |
-| `AUDIO_SOURCE_NAME` | *(empty)* | Display name of the camera whose audio is used in the side-by-side grid. Empty = automatic (the first angle). **Live-adjustable** in `/control` and persisted. |
+| `BUFFER_CYCLE_MIN_SECONDS` | `30` | Minimum duration of each camera's buffer cycle. The actual cycle used is `max(BUFFER_CYCLE_MIN_SECONDS, clip duration + buffer margin)` — the extra slack lets the server always cut the **full** requested duration even across a recording-cycle boundary (prevents short clips, e.g. 9.6s for a requested 10s). |
 | `TARGET_HEIGHT` | `1080` | Target height (px) of the normalized output. |
 | `TARGET_FPS` | `60` | Target FPS of the normalized output. |
-| `CAPTURE_WIDTH` / `CAPTURE_HEIGHT` / `CAPTURE_FPS` | `1920` / `1080` / `60` | Resolution/fps the phones request from getUserMedia (as *ideal* — each device settles on the closest it supports). Separate from `TARGET_*` (the server's output); lower them to ease weak or overheating phones. **Live-adjustable** in `/control` from a preset list (connected cameras re-acquire at the new setting) and persisted. |
 | `RETENTION_DAYS` | *(empty)* | Days to keep clips. Empty = keep everything forever. If set, cleanup runs on startup and then once a day. |
+
+**Control-page settings** — tuned live on `/control` and persisted to `<DATA_DIR>/config.json` (code
+defaults shown; no env for these):
+
+| Setting | Default | Description |
+|---|---|---|
+| Clip duration | `20s` | Clip length for a play (5–60s, capped by `CLIP_DURATION_MAX_SECONDS`). |
+| Buffer margin | `5s` | Extra seconds each camera buffers *beyond* the clip duration — the safety slack the server reaches into to recover MediaRecorder rotation gaps (0–60s; never added to the final clip). |
+| Upload timeout | `30s` | How long the server waits for cameras to finish uploading a triggered play before finalizing with whatever arrived (10–300s). Raise it for slow/flaky Wi‑Fi so a lagging camera's angle still makes it in. |
+| Combined audio | *automatic* | Which camera's audio the side-by-side grid uses (by display name); automatic = the first angle. |
+| Capture res/fps | `1920×1080@60` | Resolution/fps the phones request from getUserMedia (as *ideal* — each device settles on the closest it supports; connected cameras re-acquire on change). Separate from `TARGET_*`; lower it to ease weak or overheating phones. |
 
 **Infrastructure variables** (already configured by `docker-compose.yml`/`start.sh`; only touch
 these if you plan to run outside Docker or change the default ports):

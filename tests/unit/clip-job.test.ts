@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { existsSync, mkdtempSync } from "node:fs";
+import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { JobManager } from "@server/clip-job";
@@ -14,9 +14,12 @@ function setup(
   processOk = true,
   writeMetaThrows = false,
   onProcess?: (angles: RawAngle[]) => void,
-  opts: { configEnv?: Record<string, string | undefined> } = {},
+  opts: { persistedConfig?: Record<string, unknown> } = {},
 ) {
   const dir = mkdtempSync(join(tmpdir(), "replay-job-"));
+  if (opts.persistedConfig) {
+    writeFileSync(join(dir, "config.json"), JSON.stringify(opts.persistedConfig));
+  }
   const updates: JobStatus[] = [];
   const rawUpdates: JobStatus[] = [];
   const records: string[] = [];
@@ -28,7 +31,7 @@ function setup(
   }
   const manager = new JobManager({
     storage,
-    config: ConfigStore.load(dir, opts.configEnv ?? { PASSWORD: "x", SESSION_SECRET: "x" }),
+    config: ConfigStore.load(dir, { PASSWORD: "x", SESSION_SECRET: "x" }),
     hub: { onlineCameraIds: () => cameraIds },
     queue: new SerialQueue(),
     publishRecord: (jobId) => records.push(jobId),
@@ -49,9 +52,9 @@ function setup(
         errors: [],
       };
     },
-    // A fixed override keeps the timeout-driven tests fast; when a test supplies its own configEnv it
+    // A fixed override keeps the timeout-driven tests fast; when a test seeds its own config.json it
     // omits the override so the manager exercises the real config.uploadTimeoutSeconds path instead.
-    uploadTimeoutMs: opts.configEnv ? undefined : 60,
+    uploadTimeoutMs: opts.persistedConfig ? undefined : 60,
     cooldownMs: 20,
   });
   return { manager, updates, rawUpdates, records, dir };
@@ -97,10 +100,10 @@ describe("JobManager", () => {
   });
 
   it("finalizes via the configured upload timeout when no override is supplied", async () => {
-    // No uploadTimeoutMs override → the fallback timer must read config.uploadTimeoutSeconds
-    // (0.05s = 50ms here). With the old hardcoded 30s it would never finalize inside waitFor.
+    // No uploadTimeoutMs override → the fallback timer must read config.uploadTimeoutSeconds, seeded
+    // here via config.json to 0.05s (50ms). With the old hardcoded 30s it wouldn't finalize in time.
     const { manager, updates } = setup(["cam1"], true, false, undefined, {
-      configEnv: { PASSWORD: "x", SESSION_SECRET: "x", UPLOAD_TIMEOUT_SECONDS: "0.05" },
+      persistedConfig: { uploadTimeoutSeconds: 0.05 },
     });
     manager.trigger(1000);
     await waitFor(() => updates.some((u) => u.state === "error")); // no uploads → finalized to error
