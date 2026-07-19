@@ -86,6 +86,9 @@ export type ServerMessage =
       clipDurationSeconds: number;
       audioSourceName: string | null;
       bufferCycleMinSeconds: number;
+      /** Capture resolution/fps the cameras should request (see `config.ts`); the device picks the
+       * closest it supports. Read by `web/camera/camera.ts` for its getUserMedia constraints. */
+      capture: { width: number; height: number; fps: number };
       jobs: JobStatus[];
       freeDiskGB: number | null;
     }

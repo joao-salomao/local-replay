@@ -216,6 +216,11 @@ export function createApp(ctx: AppContext) {
           cameras: ctx.hub.cameras(),
           clipDurationSeconds: ctx.config.value.clipDurationSeconds,
           audioSourceName: ctx.config.value.audioSourceName,
+          capture: {
+            width: ctx.config.value.captureWidth,
+            height: ctx.config.value.captureHeight,
+            fps: ctx.config.value.captureFps,
+          },
           jobs: ctx.jobs.jobs(),
           freeDiskGB: ctx.storage.freeDiskGB(),
         }),

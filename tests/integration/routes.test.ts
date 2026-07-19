@@ -105,6 +105,7 @@ describe("routes", () => {
     const state = await (await fetch(`${base}/api/state`, { headers: { cookie } })).json();
     expect(state.clipDurationSeconds).toBe(30);
     expect(state.cameras).toEqual([]);
+    expect(state.capture).toEqual({ width: 1920, height: 1080, fps: 60 }); // capture config defaults
   });
 
   it("sets, clears, and validates the combined-audio source camera", async () => {

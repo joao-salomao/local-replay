@@ -26,6 +26,12 @@ export type Config = {
   audioSourceName: string | null;
   targetHeight: number;
   targetFps: number;
+  /** Capture resolution/fps the cameras REQUEST from getUserMedia (as `ideal`; the device picks the
+   * closest it actually supports). Separate from the target above (the server's normalized output) —
+   * lower these to ease weak or overheating phones. */
+  captureWidth: number;
+  captureHeight: number;
+  captureFps: number;
   /** Days to keep clips before automatic deletion; `null` disables cleanup entirely. */
   retentionDays: number | null;
 };
@@ -38,6 +44,9 @@ export const DEFAULT_CONFIG: Omit<Config, "password" | "sessionSecret"> = {
   audioSourceName: null,
   targetHeight: 1080,
   targetFps: 60,
+  captureWidth: 1920,
+  captureHeight: 1080,
+  captureFps: 60,
   retentionDays: null,
 };
 
@@ -71,10 +80,12 @@ export class ConfigStore {
     if (!password) {
       throw new Error("PASSWORD is required — set it in your .env (see .env.example).");
     }
+
     const sessionSecret = env.SESSION_SECRET?.trim();
     if (!sessionSecret) {
       throw new Error("SESSION_SECRET is required — set it in your .env (see .env.example).");
     }
+
     const retention = env.RETENTION_DAYS?.trim();
     return new ConfigStore({
       password,
@@ -91,6 +102,9 @@ export class ConfigStore {
       audioSourceName: env.AUDIO_SOURCE_NAME?.trim() || null,
       targetHeight: numEnv(env.TARGET_HEIGHT, DEFAULT_CONFIG.targetHeight),
       targetFps: numEnv(env.TARGET_FPS, DEFAULT_CONFIG.targetFps),
+      captureWidth: numEnv(env.CAPTURE_WIDTH, DEFAULT_CONFIG.captureWidth),
+      captureHeight: numEnv(env.CAPTURE_HEIGHT, DEFAULT_CONFIG.captureHeight),
+      captureFps: numEnv(env.CAPTURE_FPS, DEFAULT_CONFIG.captureFps),
       retentionDays: retention && Number.isFinite(Number(retention)) ? Number(retention) : null,
     });
   }
@@ -101,6 +115,7 @@ export class ConfigStore {
     if (!Number.isInteger(seconds) || seconds < 5 || seconds > this.value.clipDurationMaxSeconds) {
       throw new Error(`invalid clip duration: ${seconds}`);
     }
+
     this.value.clipDurationSeconds = seconds;
   }
 
@@ -112,8 +127,12 @@ export class ConfigStore {
       this.value.audioSourceName = null;
       return;
     }
+
     const trimmed = name.trim();
-    if (!trimmed || trimmed.length > 200) throw new Error(`invalid audio source: ${name}`);
+    if (!trimmed || trimmed.length > 200) {
+      throw new Error(`invalid audio source: ${name}`);
+    }
+
     this.value.audioSourceName = trimmed;
   }
 }

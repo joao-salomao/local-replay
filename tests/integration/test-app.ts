@@ -86,6 +86,11 @@ export async function createAppForTest(
         clipDurationSeconds: config.value.clipDurationSeconds,
         audioSourceName: config.value.audioSourceName,
         bufferCycleMinSeconds: config.value.bufferCycleMinSeconds,
+        capture: {
+          width: config.value.captureWidth,
+          height: config.value.captureHeight,
+          fps: config.value.captureFps,
+        },
         jobs: ctx.jobs.jobs(),
         freeDiskGB: storage.freeDiskGB(),
       } satisfies ServerMessage),

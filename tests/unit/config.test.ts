@@ -19,6 +19,9 @@ describe("ConfigStore.fromEnv", () => {
     expect(c.audioSourceName).toBeNull();
     expect(c.targetHeight).toBe(DEFAULT_CONFIG.targetHeight);
     expect(c.targetFps).toBe(DEFAULT_CONFIG.targetFps);
+    expect(c.captureWidth).toBe(DEFAULT_CONFIG.captureWidth);
+    expect(c.captureHeight).toBe(DEFAULT_CONFIG.captureHeight);
+    expect(c.captureFps).toBe(DEFAULT_CONFIG.captureFps);
     expect(c.retentionDays).toBeNull();
   });
 
@@ -32,6 +35,9 @@ describe("ConfigStore.fromEnv", () => {
       AUDIO_SOURCE_NAME: "  Fundo  ",
       TARGET_HEIGHT: "720",
       TARGET_FPS: "30",
+      CAPTURE_WIDTH: "1280",
+      CAPTURE_HEIGHT: "720",
+      CAPTURE_FPS: "24",
       RETENTION_DAYS: "14",
     }).value;
     expect(c.password).toBe("secret");
@@ -42,6 +48,9 @@ describe("ConfigStore.fromEnv", () => {
     expect(c.audioSourceName).toBe("Fundo");
     expect(c.targetHeight).toBe(720);
     expect(c.targetFps).toBe(30);
+    expect(c.captureWidth).toBe(1280);
+    expect(c.captureHeight).toBe(720);
+    expect(c.captureFps).toBe(24);
     expect(c.retentionDays).toBe(14);
   });
 

@@ -105,9 +105,10 @@ warning. That's already enough, including for the WebSocket.
 - Keep the phone plugged in and in the shade: prolonged heat drops the fps and capture quality on
   both platforms.
 - 60fps is the browser's **best effort** — several devices (including iPhones) deliver 30fps even
-  when 60 is requested as the ideal. The `/camera` page shows the actual resolution/fps obtained,
-  updated every 5s; the server's final output is conformed to the target resolution/fps (default
-  1080p60, adjustable via `targetHeight`/`targetFps`) regardless of the source.
+  when 60 is requested. The server tells each camera what resolution/fps to request
+  (`CAPTURE_WIDTH`/`CAPTURE_HEIGHT`/`CAPTURE_FPS`) and the device settles on the closest it supports;
+  the `/camera` page shows what it actually got, updated every 5s. The server's final output is
+  conformed separately to `TARGET_HEIGHT`/`TARGET_FPS` (default 1080p60) regardless of the source.
 
 ## Configuration
 
@@ -130,6 +131,7 @@ no auto-generated password or on-disk secret anymore). Everything else has a def
 | `AUDIO_SOURCE_NAME` | *(empty)* | Display name of the camera whose audio is used in the side-by-side grid. Empty = automatic (the first angle). Also selectable live in `/control`. |
 | `TARGET_HEIGHT` | `1080` | Target height (px) of the normalized output. |
 | `TARGET_FPS` | `60` | Target FPS of the normalized output. |
+| `CAPTURE_WIDTH` / `CAPTURE_HEIGHT` / `CAPTURE_FPS` | `1920` / `1080` / `60` | Resolution/fps the phones request from getUserMedia (as *ideal* — each device settles on the closest it supports). Separate from `TARGET_*` (the server's output); lower them to ease weak or overheating phones. |
 | `RETENTION_DAYS` | *(empty)* | Days to keep clips. Empty = keep everything forever. If set, cleanup runs on startup and then once a day. |
 
 **Infrastructure variables** (already configured by `docker-compose.yml`/`start.sh`; only touch

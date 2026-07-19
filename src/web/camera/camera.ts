@@ -1,5 +1,6 @@
 import { cycleSeconds, selectFilesForWindow } from "@shared/buffer-window";
 import type { ServerMessage } from "@shared/protocol";
+import { api } from "@web/shared/api";
 import { $ } from "@web/shared/dom-helpers";
 import { WsClient } from "@web/shared/ws-client";
 
@@ -36,6 +37,7 @@ import { WsClient } from "@web/shared/ws-client";
  */
 
 type BufferedFile = { blob: Blob; mimeType: string; startMs: number; durationMs: number };
+type CaptureConfig = { width: number; height: number; fps: number };
 
 const MIME_CANDIDATES = [
   "video/mp4;codecs=avc1",
@@ -51,6 +53,8 @@ let stream: MediaStream;
 let mimeType = "";
 let clipDurationSeconds = 20;
 let bufferCycleMinSeconds = 30;
+// Capture res/fps the server asks for (fetched at start); getUserMedia picks the closest supported.
+let capture: CaptureConfig = { width: 1920, height: 1080, fps: 60 };
 let recorder: MediaRecorder | null = null;
 let files: BufferedFile[] = []; // previous + just-finalized, max 2
 let cycleTimer = 0;
@@ -62,16 +66,18 @@ let wasHidden = false;
 let currentDeviceId: string | null = null;
 
 /**
- * Requests the camera (`deviceId` if switching lenses, else the environment-facing camera) with
- * audio, falling back to video-only if audio fails (some devices/browsers have no working mic, or
- * grant camera and microphone permission independently) — silent video beats no video at all.
+ * Requests the camera (`deviceId` if switching lenses, else the environment-facing camera) at the
+ * server-defined capture resolution/fps (`capture`, fetched in the start handler) — passed as
+ * getUserMedia `ideal`s so the device settles on the closest it actually supports. Falls back to
+ * video-only if audio fails (some devices/browsers have no working mic, or grant camera and mic
+ * permission independently) — silent video beats no video at all.
  */
 async function acquireMedia(deviceId: string | null): Promise<MediaStream> {
   const video = {
     ...(deviceId ? { deviceId: { exact: deviceId } } : { facingMode: { ideal: "environment" } }),
-    width: { ideal: 1920 },
-    height: { ideal: 1080 },
-    frameRate: { ideal: 60 },
+    width: { ideal: capture.width },
+    height: { ideal: capture.height },
+    frameRate: { ideal: capture.fps },
   } as MediaTrackConstraints;
   try {
     return await navigator.mediaDevices.getUserMedia({ video, audio: true });
@@ -94,7 +100,7 @@ function reportStatus(): void {
     label: track.label,
   });
   $("media-info").textContent =
-    `${s.width}×${s.height} @ ${Math.round(s.frameRate ?? 0)}fps (60fps é melhor esforço — varia por aparelho)`;
+    `${s.width}×${s.height} @ ${Math.round(s.frameRate ?? 0)}fps (alvo do servidor — o aparelho usa o mais próximo)`;
 }
 
 /** Recovers from track death generally (device unplugged, permission revoked mid-session), not
@@ -159,8 +165,7 @@ async function populateCameraSelect(): Promise<void> {
  * buffer and immediately start the next cycle. See the file header for the full `cycleGen`
  * generation-guard rationale; the short version is that `onstop`'s `gen === cycleGen` check tells
  * a (possibly stale, asynchronously-firing) `onstop` whether it's still allowed to touch shared
- * state. Bitrate is bumped for high-framerate capture (60fps needs more bits/frame than 30fps to
- * hold the same visual quality).
+ * state. The recorder's bitrate scales with the actual captured resolution × fps (see below).
  */
 function startCycle(): void {
   const gen = ++cycleGen;
@@ -169,7 +174,14 @@ function startCycle(): void {
   const settings = stream.getVideoTracks()[0]!.getSettings();
   const rec = new MediaRecorder(stream, {
     mimeType,
-    videoBitsPerSecond: (settings.frameRate ?? 30) >= 50 ? 12_000_000 : 6_000_000,
+    // ~0.1 bits/pixel scales the bitrate with the ACTUAL capture size/fps (≈12 Mbps at 1080p60,
+    // ≈6 Mbps at 1080p30, proportionally lower for smaller/slower captures).
+    videoBitsPerSecond: Math.round(
+      (settings.width ?? capture.width) *
+        (settings.height ?? capture.height) *
+        (settings.frameRate ?? capture.fps) *
+        0.1,
+    ),
   });
   recorder = rec;
   rec.ondataavailable = (e) => {
@@ -403,6 +415,13 @@ $("start").onclick = async () => {
     return;
   }
   localStorage.setItem("angleName", name);
+  // Ask the server which capture resolution/fps to request; getUserMedia's `ideal` then makes the
+  // device settle on the closest it actually supports. On any error we keep the built-in defaults.
+  try {
+    capture = (await api<{ capture: CaptureConfig }>("/api/state")).capture;
+  } catch {
+    /* keep the default `capture` */
+  }
   try {
     stream = await acquireMedia(null);
   } catch (e) {
