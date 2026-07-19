@@ -27,7 +27,7 @@
         <select id="capture-preset" aria-label="Resolução e FPS de captura das câmeras"></select>
         <div class="field-row">
           <div class="field">
-            <p class="muted">Buffer extra (s) <button type="button" class="hint" aria-describedby="tip-buffer">i<span class="hint-tip" role="tooltip" id="tip-buffer">Segundos que cada câmera mantém no buffer ALÉM da duração do clipe. Essa folga deixa o servidor recuperar as micro‑falhas entre ciclos de gravação (evita clipes curtos, ex.: 9,6s num pedido de 10s). Esses segundos extras nunca entram no clipe final — e não ajudam se o upload estiver lento.</span></button></p>
+            <p class="muted">Buffer extra (s) <button type="button" class="hint" aria-describedby="tip-buffer">i<span class="hint-tip" role="tooltip" id="tip-buffer">Segundos que cada câmera mantém no buffer ALÉM da duração do clipe — uma folga de segurança. Ela recupera as micro‑falhas entre ciclos de gravação e tolera até ~esses segundos de atraso na câmera receber o gatilho de gravação; sem ela o clipe sairia curto (ex.: 9,6s num pedido de 10s). Esses segundos extras nunca entram no clipe final e não ajudam em upload lento.</span></button></p>
             <input type="number" id="buffer-margin" min="0" max="60" step="1" inputmode="numeric" aria-label="Buffer extra da câmera em segundos" />
           </div>
           <div class="field">
