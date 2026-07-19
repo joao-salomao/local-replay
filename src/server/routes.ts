@@ -200,6 +200,27 @@ export function createApp(ctx: AppContext) {
       }),
     },
 
+    "/api/config/capture": {
+      POST: requireAuth(async (req) => {
+        const b = (await req.json().catch(() => ({}))) as {
+          width?: number;
+          height?: number;
+          fps?: number;
+        };
+        try {
+          ctx.config.setCapture(Number(b.width), Number(b.height), Number(b.fps));
+        } catch {
+          return json({ error: "invalid capture preset" }, 400);
+        }
+        // Broadcast the new state: connected cameras re-acquire at the new resolution/fps (see
+        // web/camera/camera.ts), and new ones read it from /api/state when they connect.
+        ctx.hub.notifyStateChanged();
+        const { captureWidth: width, captureHeight: height, captureFps: fps } = ctx.config.value;
+        log.info("capture changed", { width, height, fps });
+        return json({ capture: { width, height, fps } });
+      }),
+    },
+
     // Control removes a connected camera by id: the camera's own page gets a `removed` message and
     // redirects back to the role picker (see `hub.ts#removeCamera` and `web/camera/camera.ts`).
     "/api/cameras/:id/remove": {

@@ -1,3 +1,5 @@
+import { isCapturePreset } from "@shared/capture-presets";
+
 /**
  * Server configuration, sourced entirely from environment variables (see `.env.example`). Nothing
  * is persisted to disk anymore: `PASSWORD` is required (the server refuses to boot without it),
@@ -28,7 +30,8 @@ export type Config = {
   targetFps: number;
   /** Capture resolution/fps the cameras REQUEST from getUserMedia (as `ideal`; the device picks the
    * closest it actually supports). Separate from the target above (the server's normalized output) —
-   * lower these to ease weak or overheating phones. */
+   * lower these to ease weak or overheating phones. Initial value from `CAPTURE_*`; changeable live
+   * from the control page (in-memory only, resets to the env value on restart — see `setCapture`). */
   captureWidth: number;
   captureHeight: number;
   captureFps: number;
@@ -62,9 +65,9 @@ function numEnv(raw: string | undefined, fallback: number): number {
 }
 
 /**
- * Holds the live `Config`. The two runtime-adjustable fields (`clipDurationSeconds`,
- * `audioSourceName`) can be mutated via the setters below; everything else is fixed at construction
- * from the environment. Construct via `ConfigStore.fromEnv`.
+ * Holds the live `Config`. The runtime-adjustable fields (`clipDurationSeconds`, `audioSourceName`,
+ * and the capture resolution/fps) can be mutated via the setters below; everything else is fixed at
+ * construction from the environment. Construct via `ConfigStore.fromEnv`.
  */
 export class ConfigStore {
   private constructor(public value: Config) {}
@@ -134,5 +137,17 @@ export class ConfigStore {
     }
 
     this.value.audioSourceName = trimmed;
+  }
+
+  /** Applies a new capture resolution/fps, validated against the predefined presets
+   * (`shared/capture-presets.ts`). In-memory only (see `setClipDuration`) — resets to the `CAPTURE_*`
+   * env values on restart. */
+  setCapture(width: number, height: number, fps: number): void {
+    if (!isCapturePreset(width, height, fps)) {
+      throw new Error(`invalid capture preset: ${width}x${height}@${fps}`);
+    }
+    this.value.captureWidth = width;
+    this.value.captureHeight = height;
+    this.value.captureFps = fps;
   }
 }

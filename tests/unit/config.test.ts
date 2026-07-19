@@ -85,4 +85,14 @@ describe("ConfigStore.fromEnv", () => {
     expect(() => store.setAudioSource("   ")).toThrow(); // empty after trim
     expect(() => store.setAudioSource("x".repeat(201))).toThrow(); // oversized
   });
+
+  it("setCapture accepts a known preset (in memory) and rejects anything else", () => {
+    const store = ConfigStore.fromEnv({ PASSWORD: "x", SESSION_SECRET: "x" });
+    store.setCapture(1280, 720, 30); // a real preset
+    expect(store.value.captureWidth).toBe(1280);
+    expect(store.value.captureHeight).toBe(720);
+    expect(store.value.captureFps).toBe(30);
+    expect(() => store.setCapture(1234, 567, 60)).toThrow(); // not a preset resolution
+    expect(() => store.setCapture(1280, 720, 999)).toThrow(); // preset size, unsupported fps
+  });
 });

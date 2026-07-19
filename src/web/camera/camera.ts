@@ -289,6 +289,16 @@ function handleMessage(msg: ServerMessage): void {
       clipDurationSeconds = msg.clipDurationSeconds; // applied on the next cycle restart
       $("buffer-status").textContent = `Bufferizando últimos ${clipDurationSeconds}s`;
     }
+    // Control changed the desired capture resolution/fps: re-acquire at the new settings (a live
+    // track's resolution can't be changed in place, so this tears the camera down and re-opens it).
+    if (
+      msg.capture.width !== capture.width ||
+      msg.capture.height !== capture.height ||
+      msg.capture.fps !== capture.fps
+    ) {
+      capture = msg.capture;
+      void recoverStream();
+    }
   }
   if (msg.type === "record" && recorder?.state === "recording") {
     pendingRecord = msg;

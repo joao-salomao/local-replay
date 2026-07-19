@@ -1,3 +1,4 @@
+import { CAPTURE_PRESETS } from "@shared/capture-presets";
 import type { CameraInfo, JobStatus, LogEntry, ServerMessage } from "@shared/protocol";
 import { api } from "@web/shared/api";
 import { $ } from "@web/shared/dom-helpers";
@@ -14,6 +15,7 @@ type State = {
   cameras: CameraInfo[];
   clipDurationSeconds: number;
   audioSourceName: string | null;
+  capture: { width: number; height: number; fps: number };
   jobs: JobStatus[];
   freeDiskGB?: number | null;
 };
@@ -27,7 +29,13 @@ function jobLabel(job: JobStatus): string {
   return `Lance #${job.clipNumber} — erro`;
 }
 
-let state: State = { cameras: [], clipDurationSeconds: 20, audioSourceName: null, jobs: [] };
+let state: State = {
+  cameras: [],
+  clipDurationSeconds: 20,
+  audioSourceName: null,
+  capture: { width: 1920, height: 1080, fps: 60 },
+  jobs: [],
+};
 
 /**
  * Full unconditional re-render from `state`. Unlike the clips gallery's polling loop (which
@@ -93,6 +101,18 @@ function render(): void {
         `<option value="${esc(n)}"${n === state.audioSourceName ? " selected" : ""}>${esc(n)}</option>`,
     )
     .join("")}`;
+  // Capture preset: the current server setting is selected; changing it makes connected cameras
+  // re-acquire at the new resolution/fps (see camera.ts). If the env value isn't one of the presets,
+  // it's shown as a disabled "Atual" option so the picker still reflects reality.
+  const curCap = `${state.capture.width}x${state.capture.height}x${state.capture.fps}`;
+  const presetOpts = CAPTURE_PRESETS.map(
+    (p) =>
+      `<option value="${p.width}x${p.height}x${p.fps}"${`${p.width}x${p.height}x${p.fps}` === curCap ? " selected" : ""}>${esc(p.label)}</option>`,
+  ).join("");
+  const customOpt = CAPTURE_PRESETS.some((p) => `${p.width}x${p.height}x${p.fps}` === curCap)
+    ? ""
+    : `<option value="${curCap}" selected disabled>Atual (${state.capture.width}×${state.capture.height}@${state.capture.fps})</option>`;
+  $("capture-preset").innerHTML = customOpt + presetOpts;
   $("jobs").innerHTML = state.jobs
     .slice(0, 5)
     .map(
@@ -119,6 +139,16 @@ $<HTMLSelectElement>("audio-source").onchange = async (e) => {
   await api("/api/config/audio-source", { method: "POST", body: JSON.stringify({ name }) });
 };
 
+// Wired once (see the audio-source note). Value is "WIDTHxHEIGHTxFPS" — split it back into the
+// numbers the server expects.
+$<HTMLSelectElement>("capture-preset").onchange = async (e) => {
+  const [width, height, fps] = (e.target as HTMLSelectElement).value.split("x").map(Number);
+  await api("/api/config/capture", {
+    method: "POST",
+    body: JSON.stringify({ width, height, fps }),
+  });
+};
+
 const ws = new WsClient({
   onStatus: (connected) => {
     $("conn-dot").classList.toggle("on", connected);
@@ -131,6 +161,7 @@ const ws = new WsClient({
         cameras: msg.cameras,
         clipDurationSeconds: msg.clipDurationSeconds,
         audioSourceName: msg.audioSourceName,
+        capture: msg.capture,
         jobs: msg.jobs,
         freeDiskGB: msg.freeDiskGB,
       };

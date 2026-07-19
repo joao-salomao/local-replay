@@ -145,6 +145,43 @@ describe("routes", () => {
     expect(state.audioSourceName).toBeNull();
   });
 
+  it("changes the capture preset, rejects non-presets, and tolerates a non-JSON body", async () => {
+    const cookie = await login();
+    const ok = await fetch(`${base}/api/config/capture`, {
+      method: "POST",
+      headers: { cookie },
+      body: JSON.stringify({ width: 1280, height: 720, fps: 30 }),
+    });
+    expect(ok.status).toBe(200);
+    expect((await ok.json()).capture).toEqual({ width: 1280, height: 720, fps: 30 });
+    const state = await (await fetch(`${base}/api/state`, { headers: { cookie } })).json();
+    expect(state.capture).toEqual({ width: 1280, height: 720, fps: 30 });
+
+    const bad = await fetch(`${base}/api/config/capture`, {
+      method: "POST",
+      headers: { cookie },
+      body: JSON.stringify({ width: 999, height: 999, fps: 60 }),
+    });
+    expect(bad.status).toBe(400);
+    expect((await bad.json()).error).toBe("invalid capture preset");
+
+    // Non-JSON body: req.json() rejects, the `.catch(() => ({}))` fallback leaves the fields
+    // undefined -> Number(undefined) is NaN -> not a preset -> 400.
+    const nonJson = await fetch(`${base}/api/config/capture`, {
+      method: "POST",
+      headers: { cookie },
+      body: "not json",
+    });
+    expect(nonJson.status).toBe(400);
+
+    // restore the default so the shared app isn't left on 720p for later tests
+    await fetch(`${base}/api/config/capture`, {
+      method: "POST",
+      headers: { cookie },
+      body: JSON.stringify({ width: 1920, height: 1080, fps: 60 }),
+    });
+  });
+
   it("blocks path traversal on /files", async () => {
     const cookie = await login();
     expect(

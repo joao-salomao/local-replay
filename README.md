@@ -61,8 +61,9 @@ After opening the URL, each device enters the password and picks a role:
   the camera in the background).
 - **🔴 Controlar gravação** (Control recording) — the control page: a big **GRAVAR** button, a
   clip duration selector (10/20/30/45/60s), a selector for **which camera's audio** goes into the
-  combined video, a list of the cameras online with each one's live resolution/fps **and the
-  physical camera/lens it's using**, the status of the last play (capturando → processando →
+  combined video, a **capture resolution/fps** preset picker (applied live to the connected
+  cameras), a list of the cameras online with each one's live resolution/fps **and the physical
+  camera/lens it's using**, the status of the last play (capturando → processando →
   pronto — capturing → processing → ready), a collapsible **server-log viewer**, and a QR code for
   other devices to join. It can be used by any authenticated phone or by a dedicated tablet.
 - **🎬 Ver lances** (View plays) — the gallery (`/clips`): lists the most recent clips first, with
@@ -131,7 +132,7 @@ no auto-generated password or on-disk secret anymore). Everything else has a def
 | `AUDIO_SOURCE_NAME` | *(empty)* | Display name of the camera whose audio is used in the side-by-side grid. Empty = automatic (the first angle). Also selectable live in `/control`. |
 | `TARGET_HEIGHT` | `1080` | Target height (px) of the normalized output. |
 | `TARGET_FPS` | `60` | Target FPS of the normalized output. |
-| `CAPTURE_WIDTH` / `CAPTURE_HEIGHT` / `CAPTURE_FPS` | `1920` / `1080` / `60` | Resolution/fps the phones request from getUserMedia (as *ideal* — each device settles on the closest it supports). Separate from `TARGET_*` (the server's output); lower them to ease weak or overheating phones. |
+| `CAPTURE_WIDTH` / `CAPTURE_HEIGHT` / `CAPTURE_FPS` | `1920` / `1080` / `60` | Resolution/fps the phones request from getUserMedia (as *ideal* — each device settles on the closest it supports). Separate from `TARGET_*` (the server's output); lower them to ease weak or overheating phones. Also selectable live in `/control` from a preset list — connected cameras re-acquire at the new setting. |
 | `RETENTION_DAYS` | *(empty)* | Days to keep clips. Empty = keep everything forever. If set, cleanup runs on startup and then once a day. |
 
 **Infrastructure variables** (already configured by `docker-compose.yml`/`start.sh`; only touch
