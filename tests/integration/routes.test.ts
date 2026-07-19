@@ -182,6 +182,58 @@ describe("routes", () => {
     });
   });
 
+  it("adjusts the buffer margin and upload timeout, rejecting invalid values and non-JSON", async () => {
+    const cookie = await login();
+
+    // buffer margin: valid -> 200, out-of-range -> 400, non-JSON -> 400 (fallback -> NaN -> throw)
+    const bm = await fetch(`${base}/api/config/buffer-margin`, {
+      method: "POST",
+      headers: { cookie },
+      body: JSON.stringify({ seconds: 12 }),
+    });
+    expect(bm.status).toBe(200);
+    expect((await bm.json()).bufferMarginSeconds).toBe(12);
+    const bmBad = await fetch(`${base}/api/config/buffer-margin`, {
+      method: "POST",
+      headers: { cookie },
+      body: JSON.stringify({ seconds: 61 }),
+    });
+    expect(bmBad.status).toBe(400);
+    expect((await bmBad.json()).error).toBe("invalid seconds");
+    const bmNonJson = await fetch(`${base}/api/config/buffer-margin`, {
+      method: "POST",
+      headers: { cookie },
+      body: "not json",
+    });
+    expect(bmNonJson.status).toBe(400);
+
+    // upload timeout: valid -> 200, out-of-range -> 400, non-JSON -> 400
+    const ut = await fetch(`${base}/api/config/upload-timeout`, {
+      method: "POST",
+      headers: { cookie },
+      body: JSON.stringify({ seconds: 90 }),
+    });
+    expect(ut.status).toBe(200);
+    expect((await ut.json()).uploadTimeoutSeconds).toBe(90);
+    const utBad = await fetch(`${base}/api/config/upload-timeout`, {
+      method: "POST",
+      headers: { cookie },
+      body: JSON.stringify({ seconds: 5 }),
+    });
+    expect(utBad.status).toBe(400);
+    const utNonJson = await fetch(`${base}/api/config/upload-timeout`, {
+      method: "POST",
+      headers: { cookie },
+      body: "not json",
+    });
+    expect(utNonJson.status).toBe(400);
+
+    // both reflected in /api/state
+    const state = await (await fetch(`${base}/api/state`, { headers: { cookie } })).json();
+    expect(state.bufferMarginSeconds).toBe(12);
+    expect(state.uploadTimeoutSeconds).toBe(90);
+  });
+
   it("blocks path traversal on /files", async () => {
     const cookie = await login();
     expect(

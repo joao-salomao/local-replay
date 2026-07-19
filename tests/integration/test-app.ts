@@ -22,7 +22,8 @@ export async function createAppForTest(
     env?: Record<string, string | undefined>;
   } = {},
 ) {
-  const config = ConfigStore.fromEnv(
+  const config = ConfigStore.load(
+    dataDir,
     opts.env ?? { PASSWORD: "senha-teste", SESSION_SECRET: "test-secret" },
   );
   const storage = new Storage(dataDir);
@@ -86,6 +87,8 @@ export async function createAppForTest(
         clipDurationSeconds: config.value.clipDurationSeconds,
         audioSourceName: config.value.audioSourceName,
         bufferCycleMinSeconds: config.value.bufferCycleMinSeconds,
+        bufferMarginSeconds: config.value.bufferMarginSeconds,
+        uploadTimeoutSeconds: config.value.uploadTimeoutSeconds,
         capture: {
           width: config.value.captureWidth,
           height: config.value.captureHeight,

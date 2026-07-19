@@ -40,7 +40,7 @@ const port = Number(process.env.PORT ?? 8080);
 // Config and auth no longer create it as a side effect — they're env-only now — so do it here.
 mkdirSync(dataDir, { recursive: true });
 
-const config = ConfigStore.fromEnv();
+const config = ConfigStore.load(dataDir);
 const storage = new Storage(dataDir);
 const hub = new Hub();
 const queue = new SerialQueue();
@@ -147,6 +147,8 @@ function publishState(): void {
     clipDurationSeconds: config.value.clipDurationSeconds,
     audioSourceName: config.value.audioSourceName,
     bufferCycleMinSeconds: config.value.bufferCycleMinSeconds,
+    bufferMarginSeconds: config.value.bufferMarginSeconds,
+    uploadTimeoutSeconds: config.value.uploadTimeoutSeconds,
     capture: {
       width: config.value.captureWidth,
       height: config.value.captureHeight,

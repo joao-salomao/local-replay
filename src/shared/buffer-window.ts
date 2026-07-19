@@ -12,12 +12,14 @@
 export type BufferFile = { startMs: number; durationMs: number };
 
 /**
- * Extra seconds of media the buffer holds BEYOND the configured clip duration. This slack is what
- * lets `computeCutWindow` reach a cut backward in the media timeline to recover the sub-second gaps
- * MediaRecorder leaves when it rotates between cycles — without it, a clip window that straddles a
- * cycle boundary would come out short (e.g. 9.6s for a requested 10s). The extra is only ever a
- * safety reserve: it's never included in the final clip (the cut takes exactly the requested
- * duration of media and discards the rest).
+ * Default for the extra seconds of media the buffer holds BEYOND the configured clip duration. This
+ * slack is what lets `computeCutWindow` reach a cut backward in the media timeline to recover the
+ * sub-second gaps MediaRecorder leaves when it rotates between cycles — without it, a clip window
+ * that straddles a cycle boundary would come out short (e.g. 9.6s for a requested 10s). The extra is
+ * only ever a safety reserve: it's never included in the final clip (the cut takes exactly the
+ * requested duration of media and discards the rest). Runtime-adjustable via the control page (see
+ * `config.ts#bufferMarginSeconds`), so `cycleSeconds` takes the live value as an argument and only
+ * falls back to this default when none is passed.
  */
 export const BUFFER_MARGIN_SECONDS = 5;
 
@@ -30,10 +32,16 @@ export const BUFFER_MARGIN_SECONDS = 5;
  * plus the margin slack that `computeCutWindow` reaches into to compensate for rotation gaps — a
  * shorter cycle could leave the window uncovered or with no slack to recover the gap. Also floored
  * at minCycleSeconds so a short configured clip duration doesn't force excessively frequent
- * MediaRecorder restarts.
+ * MediaRecorder restarts. `marginSeconds` is the runtime-adjustable extra buffer (control page →
+ * `config.ts#bufferMarginSeconds`); it defaults to `BUFFER_MARGIN_SECONDS` for callers that don't
+ * thread a live value through.
  */
-export function cycleSeconds(clipDurationSeconds: number, minCycleSeconds: number): number {
-  return Math.max(minCycleSeconds, clipDurationSeconds + BUFFER_MARGIN_SECONDS);
+export function cycleSeconds(
+  clipDurationSeconds: number,
+  minCycleSeconds: number,
+  marginSeconds: number = BUFFER_MARGIN_SECONDS,
+): number {
+  return Math.max(minCycleSeconds, clipDurationSeconds + marginSeconds);
 }
 
 /**

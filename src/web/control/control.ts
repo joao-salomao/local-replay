@@ -15,11 +15,27 @@ type State = {
   cameras: CameraInfo[];
   clipDurationSeconds: number;
   audioSourceName: string | null;
+  bufferMarginSeconds: number;
+  uploadTimeoutSeconds: number;
   capture: { width: number; height: number; fps: number };
   jobs: JobStatus[];
   freeDiskGB?: number | null;
 };
 const DURATIONS = [10, 20, 30, 45, 60];
+const BUFFER_MARGIN_OPTIONS = [0, 3, 5, 10, 15];
+const UPLOAD_TIMEOUT_OPTIONS = [30, 45, 60, 90, 120, 180];
+
+/** Builds `<option>`s for a seconds-valued picker: the preset list, plus — if the current server
+ * value isn't one of them (e.g. an env-set value) — a selected option for it so the picker still
+ * reflects reality. Values are plain integers, so no escaping is needed (see the capture preset). */
+function secondsSelect(options: number[], current: number): string {
+  const custom = options.includes(current)
+    ? ""
+    : `<option value="${current}" selected>${current}s</option>`;
+  return `${custom}${options
+    .map((n) => `<option value="${n}"${n === current ? " selected" : ""}>${n}s</option>`)
+    .join("")}`;
+}
 
 /** Maps a job's lifecycle state (see `protocol.ts#JobState`) to its pt-BR display label. */
 function jobLabel(job: JobStatus): string {
@@ -33,6 +49,8 @@ let state: State = {
   cameras: [],
   clipDurationSeconds: 20,
   audioSourceName: null,
+  bufferMarginSeconds: 5,
+  uploadTimeoutSeconds: 30,
   capture: { width: 1920, height: 1080, fps: 60 },
   jobs: [],
 };
@@ -113,6 +131,9 @@ function render(): void {
     ? ""
     : `<option value="${curCap}" selected disabled>Atual (${state.capture.width}×${state.capture.height}@${state.capture.fps})</option>`;
   $("capture-preset").innerHTML = customOpt + presetOpts;
+  // Extra buffer (camera-side) and upload timeout (server-side) — the two knobs against slow uploads.
+  $("buffer-margin").innerHTML = secondsSelect(BUFFER_MARGIN_OPTIONS, state.bufferMarginSeconds);
+  $("upload-timeout").innerHTML = secondsSelect(UPLOAD_TIMEOUT_OPTIONS, state.uploadTimeoutSeconds);
   $("jobs").innerHTML = state.jobs
     .slice(0, 5)
     .map(
@@ -149,6 +170,17 @@ $<HTMLSelectElement>("capture-preset").onchange = async (e) => {
   });
 };
 
+// Wired once (see the audio-source note). Both are plain integer-seconds settings the server persists.
+$<HTMLSelectElement>("buffer-margin").onchange = async (e) => {
+  const seconds = Number((e.target as HTMLSelectElement).value);
+  await api("/api/config/buffer-margin", { method: "POST", body: JSON.stringify({ seconds }) });
+};
+
+$<HTMLSelectElement>("upload-timeout").onchange = async (e) => {
+  const seconds = Number((e.target as HTMLSelectElement).value);
+  await api("/api/config/upload-timeout", { method: "POST", body: JSON.stringify({ seconds }) });
+};
+
 const ws = new WsClient({
   onStatus: (connected) => {
     $("conn-dot").classList.toggle("on", connected);
@@ -161,6 +193,8 @@ const ws = new WsClient({
         cameras: msg.cameras,
         clipDurationSeconds: msg.clipDurationSeconds,
         audioSourceName: msg.audioSourceName,
+        bufferMarginSeconds: msg.bufferMarginSeconds,
+        uploadTimeoutSeconds: msg.uploadTimeoutSeconds,
         capture: msg.capture,
         jobs: msg.jobs,
         freeDiskGB: msg.freeDiskGB,

@@ -19,7 +19,9 @@ export type TriggerResult = { jobId: string } | { error: "cooldown" | "no-camera
 
 /** Dependency-injection bag. `hub` is narrowed to just `onlineCameraIds` (not the full `Hub`) so
  * it's trivial to fake in tests; `processFn`/`uploadTimeoutMs`/`cooldownMs` are test-only
- * overrides letting tests swap in a fake `processClip` and shrink real-world timeouts. */
+ * overrides letting tests swap in a fake `processClip` and shrink real-world timeouts. When
+ * `uploadTimeoutMs` is omitted, the finalize timer reads the live `config.uploadTimeoutSeconds`
+ * (control-page adjustable), so a raised timeout takes effect on the next trigger without a restart. */
 type Deps = {
   storage: Storage;
   config: ConfigStore;
@@ -91,7 +93,10 @@ export class JobManager {
       expected: new Set(cameraIds),
       delivered: new Set(),
       angles: [],
-      timer: setTimeout(() => this.finalize(status.jobId), this.deps.uploadTimeoutMs ?? 30_000),
+      timer: setTimeout(
+        () => this.finalize(status.jobId),
+        this.deps.uploadTimeoutMs ?? this.deps.config.value.uploadTimeoutSeconds * 1000,
+      ),
     };
     this.active.set(status.jobId, job);
     this.recent.unshift(status);

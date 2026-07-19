@@ -1,4 +1,4 @@
-import { cycleSeconds, selectFilesForWindow } from "@shared/buffer-window";
+import { BUFFER_MARGIN_SECONDS, cycleSeconds, selectFilesForWindow } from "@shared/buffer-window";
 import type { ServerMessage } from "@shared/protocol";
 import { api } from "@web/shared/api";
 import { $ } from "@web/shared/dom-helpers";
@@ -53,6 +53,8 @@ let stream: MediaStream;
 let mimeType = "";
 let clipDurationSeconds = 20;
 let bufferCycleMinSeconds = 30;
+// Extra buffer seconds beyond the clip duration (server-driven, see config.ts#bufferMarginSeconds).
+let bufferMarginSeconds = BUFFER_MARGIN_SECONDS;
 // Capture res/fps the server asks for (fetched at start); getUserMedia picks the closest supported.
 let capture: CaptureConfig = { width: 1920, height: 1080, fps: 60 };
 let recorder: MediaRecorder | null = null;
@@ -209,9 +211,12 @@ function startCycle(): void {
   };
   rec.start(1000);
   clearTimeout(cycleTimer);
-  cycleTimer = window.setTimeout(() => {
-    if (rec.state === "recording") rec.stop();
-  }, cycleSeconds(clipDurationSeconds, bufferCycleMinSeconds) * 1000);
+  cycleTimer = window.setTimeout(
+    () => {
+      if (rec.state === "recording") rec.stop();
+    },
+    cycleSeconds(clipDurationSeconds, bufferCycleMinSeconds, bufferMarginSeconds) * 1000,
+  );
   $("buffer-status").textContent = `Bufferizando últimos ${clipDurationSeconds}s`;
 }
 
@@ -285,6 +290,7 @@ function handleMessage(msg: ServerMessage): void {
   }
   if (msg.type === "state") {
     bufferCycleMinSeconds = msg.bufferCycleMinSeconds;
+    bufferMarginSeconds = msg.bufferMarginSeconds;
     if (msg.clipDurationSeconds !== clipDurationSeconds) {
       clipDurationSeconds = msg.clipDurationSeconds; // applied on the next cycle restart
       $("buffer-status").textContent = `Bufferizando últimos ${clipDurationSeconds}s`;

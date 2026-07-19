@@ -14,6 +14,14 @@ describe("cycleSeconds", () => {
     expect(cycleSeconds(30, 30)).toBe(30 + BUFFER_MARGIN_SECONDS); // 35: margin now wins over the floor
     expect(cycleSeconds(60, 30)).toBe(60 + BUFFER_MARGIN_SECONDS); // 65: clip + margin
   });
+
+  it("honors a configurable margin, defaulting to BUFFER_MARGIN_SECONDS when omitted", () => {
+    // The margin is now runtime-adjustable (control page → config), so it's threaded in as an arg.
+    expect(cycleSeconds(30, 30, 10)).toBe(40); // clip 30 + margin 10 beats the 30 floor
+    expect(cycleSeconds(30, 30, 0)).toBe(30); // no extra buffer → the min floor wins
+    expect(cycleSeconds(60, 10, 15)).toBe(75); // clip 60 + margin 15
+    expect(cycleSeconds(30, 30)).toBe(30 + BUFFER_MARGIN_SECONDS); // omitted → default margin (5)
+  });
 });
 
 describe("selectFilesForWindow", () => {

@@ -221,6 +221,38 @@ export function createApp(ctx: AppContext) {
       }),
     },
 
+    "/api/config/buffer-margin": {
+      POST: requireAuth(async (req) => {
+        const body = (await req.json().catch(() => ({}))) as { seconds?: number };
+        try {
+          ctx.config.setBufferMargin(Number(body.seconds));
+        } catch {
+          return json({ error: "invalid seconds" }, 400);
+        }
+        // A larger extra buffer changes the cameras' recording cycle — rebroadcast so connected
+        // cameras pick up the new margin on their next cycle (see web/camera/camera.ts#startCycle).
+        ctx.hub.notifyStateChanged();
+        log.info("buffer margin changed", { seconds: ctx.config.value.bufferMarginSeconds });
+        return json({ bufferMarginSeconds: ctx.config.value.bufferMarginSeconds });
+      }),
+    },
+
+    "/api/config/upload-timeout": {
+      POST: requireAuth(async (req) => {
+        const body = (await req.json().catch(() => ({}))) as { seconds?: number };
+        try {
+          ctx.config.setUploadTimeout(Number(body.seconds));
+        } catch {
+          return json({ error: "invalid seconds" }, 400);
+        }
+        // Server-only setting (the finalize timer reads it live per job, clip-job.ts), but still
+        // broadcast so the control page's displayed value stays in sync across control clients.
+        ctx.hub.notifyStateChanged();
+        log.info("upload timeout changed", { seconds: ctx.config.value.uploadTimeoutSeconds });
+        return json({ uploadTimeoutSeconds: ctx.config.value.uploadTimeoutSeconds });
+      }),
+    },
+
     // Control removes a connected camera by id: the camera's own page gets a `removed` message and
     // redirects back to the role picker (see `hub.ts#removeCamera` and `web/camera/camera.ts`).
     "/api/cameras/:id/remove": {
@@ -237,6 +269,8 @@ export function createApp(ctx: AppContext) {
           cameras: ctx.hub.cameras(),
           clipDurationSeconds: ctx.config.value.clipDurationSeconds,
           audioSourceName: ctx.config.value.audioSourceName,
+          bufferMarginSeconds: ctx.config.value.bufferMarginSeconds,
+          uploadTimeoutSeconds: ctx.config.value.uploadTimeoutSeconds,
           capture: {
             width: ctx.config.value.captureWidth,
             height: ctx.config.value.captureHeight,

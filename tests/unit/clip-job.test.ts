@@ -14,6 +14,7 @@ function setup(
   processOk = true,
   writeMetaThrows = false,
   onProcess?: (angles: RawAngle[]) => void,
+  opts: { configEnv?: Record<string, string | undefined> } = {},
 ) {
   const dir = mkdtempSync(join(tmpdir(), "replay-job-"));
   const updates: JobStatus[] = [];
@@ -27,7 +28,7 @@ function setup(
   }
   const manager = new JobManager({
     storage,
-    config: ConfigStore.fromEnv({ PASSWORD: "x", SESSION_SECRET: "x" }),
+    config: ConfigStore.load(dir, opts.configEnv ?? { PASSWORD: "x", SESSION_SECRET: "x" }),
     hub: { onlineCameraIds: () => cameraIds },
     queue: new SerialQueue(),
     publishRecord: (jobId) => records.push(jobId),
@@ -48,7 +49,9 @@ function setup(
         errors: [],
       };
     },
-    uploadTimeoutMs: 60,
+    // A fixed override keeps the timeout-driven tests fast; when a test supplies its own configEnv it
+    // omits the override so the manager exercises the real config.uploadTimeoutSeconds path instead.
+    uploadTimeoutMs: opts.configEnv ? undefined : 60,
     cooldownMs: 20,
   });
   return { manager, updates, rawUpdates, records, dir };
@@ -91,6 +94,16 @@ describe("JobManager", () => {
     const { jobId } = manager.trigger(1000) as { jobId: string };
     manager.addUpload(jobId, "cam1", angle);
     await waitFor(() => updates.some((u) => u.state === "ready"));
+  });
+
+  it("finalizes via the configured upload timeout when no override is supplied", async () => {
+    // No uploadTimeoutMs override → the fallback timer must read config.uploadTimeoutSeconds
+    // (0.05s = 50ms here). With the old hardcoded 30s it would never finalize inside waitFor.
+    const { manager, updates } = setup(["cam1"], true, false, undefined, {
+      configEnv: { PASSWORD: "x", SESSION_SECRET: "x", UPLOAD_TIMEOUT_SECONDS: "0.05" },
+    });
+    manager.trigger(1000);
+    await waitFor(() => updates.some((u) => u.state === "error")); // no uploads → finalized to error
   });
 
   it("marks the job error when no uploads arrive or processing throws", async () => {

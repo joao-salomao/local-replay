@@ -86,6 +86,12 @@ export type ServerMessage =
       clipDurationSeconds: number;
       audioSourceName: string | null;
       bufferCycleMinSeconds: number;
+      /** Extra seconds the camera buffers beyond the clip duration (`config.ts#bufferMarginSeconds`).
+       * Read by `web/camera/camera.ts` and threaded into `cycleSeconds`. */
+      bufferMarginSeconds: number;
+      /** Server-side upload window, seconds (`config.ts#uploadTimeoutSeconds`) — surfaced so the
+       * control page can display and adjust it. Not used by the camera. */
+      uploadTimeoutSeconds: number;
       /** Capture resolution/fps the cameras should request (see `config.ts`); the device picks the
        * closest it supports. Read by `web/camera/camera.ts` for its getUserMedia constraints. */
       capture: { width: number; height: number; fps: number };

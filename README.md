@@ -76,8 +76,9 @@ After opening the URL, each device enters the password and picks a role:
 locally. When someone presses GRAVAR on `/control`, the server records the instant `T`, creates a
 job, and notifies every camera that's online. Each camera finishes the segment in progress and
 sends the buffer files covering the window `[T − duration, T]`. The server waits for the uploads
-(up to 30s — whoever doesn't deliver in time is left out of the play, which still comes out with
-the remaining angles), processes them with FFmpeg (exact cut, normalization, and combining the
+(up to a configurable timeout — 30s by default, raise it on `/control` for slow Wi‑Fi — whoever
+doesn't deliver in time is left out of the play, which still comes out with the remaining angles),
+processes them with FFmpeg (exact cut, normalization, and combining the
 angles two ways — one after another, and all at once in a side-by-side grid), and the clip appears
 in `/clips`; `/control` shows "Lance pronto" (Play ready).
 
@@ -114,25 +115,29 @@ warning. That's already enough, including for the WebSocket.
 ## Configuration
 
 All configuration is done through **environment variables** (a `.env` file, or the container's
-environment — copy `.env.example` for the full annotated list). There's no config file on disk. The
-server reads them once at startup, so changing one means editing `.env` and restarting — except
-`CLIP_DURATION_SECONDS` and `AUDIO_SOURCE_NAME`, which can also be changed **live** on `/control`
-(that live change is in-memory only and reverts to the `.env` value on the next restart).
+environment — copy `.env.example` for the full annotated list). The server reads them once at
+startup, so changing one means editing `.env` and restarting — except the handful marked
+*live-adjustable* below (clip duration, combined audio, capture res/fps, buffer margin, upload
+timeout), which can also be changed on `/control`. A live change is saved to
+`<DATA_DIR>/config.json` and **persists across restarts**: that file wins over the `.env` default,
+so the env value is really just the first-run seed (delete `config.json` to fall back to it).
 
-**`PASSWORD` and `SESSION_SECRET` are required** — the server refuses to boot without them (there's
-no auto-generated password or on-disk secret anymore). Everything else has a default.
+**`PASSWORD` and `SESSION_SECRET` are required** — the server refuses to boot without them, and
+neither is ever written to `config.json` (they stay env-only). Everything else has a default.
 
 | Variable | Default | Description |
 |---|---|---|
 | `PASSWORD` | *(required)* | Shared access password players type to log in. The server won't boot if it's unset. |
 | `SESSION_SECRET` | *(required)* | HMAC key that signs session cookies. Keep it stable across restarts (changing it logs everyone out). `.env.example` ships a working example — generate your own (`openssl rand -hex 32`) before exposing the app to the internet. |
-| `CLIP_DURATION_SECONDS` | `20` | Clip length (seconds) for a play. Also adjustable live in `/control` (until restart). |
+| `CLIP_DURATION_SECONDS` | `20` | Clip length (seconds) for a play. **Live-adjustable** in `/control` and persisted. |
 | `CLIP_DURATION_MAX_SECONDS` | `60` | Ceiling accepted for the clip duration (the server rejects higher values). |
-| `BUFFER_CYCLE_MIN_SECONDS` | `30` | Minimum duration of each camera's buffer cycle. The actual cycle used is `max(BUFFER_CYCLE_MIN_SECONDS, CLIP_DURATION_SECONDS + 5)` — the extra 5s of slack lets the server always cut the **full** requested duration even across a recording-cycle boundary (prevents short clips, e.g. 9.6s for a requested 10s). |
-| `AUDIO_SOURCE_NAME` | *(empty)* | Display name of the camera whose audio is used in the side-by-side grid. Empty = automatic (the first angle). Also selectable live in `/control`. |
+| `BUFFER_CYCLE_MIN_SECONDS` | `30` | Minimum duration of each camera's buffer cycle. The actual cycle used is `max(BUFFER_CYCLE_MIN_SECONDS, CLIP_DURATION_SECONDS + BUFFER_MARGIN_SECONDS)` — the extra slack lets the server always cut the **full** requested duration even across a recording-cycle boundary (prevents short clips, e.g. 9.6s for a requested 10s). |
+| `BUFFER_MARGIN_SECONDS` | `5` | Extra seconds each camera buffers *beyond* the clip duration — the safety slack the server reaches into to recover MediaRecorder rotation gaps (never added to the final clip). **Live-adjustable** in `/control` (0–60) and persisted. |
+| `UPLOAD_TIMEOUT_SECONDS` | `30` | How long the server waits for cameras to finish uploading a triggered play before finalizing with whatever arrived. Raise it for slow/flaky Wi‑Fi so a lagging camera's angle still makes it in. **Live-adjustable** in `/control` (10–300) and persisted. |
+| `AUDIO_SOURCE_NAME` | *(empty)* | Display name of the camera whose audio is used in the side-by-side grid. Empty = automatic (the first angle). **Live-adjustable** in `/control` and persisted. |
 | `TARGET_HEIGHT` | `1080` | Target height (px) of the normalized output. |
 | `TARGET_FPS` | `60` | Target FPS of the normalized output. |
-| `CAPTURE_WIDTH` / `CAPTURE_HEIGHT` / `CAPTURE_FPS` | `1920` / `1080` / `60` | Resolution/fps the phones request from getUserMedia (as *ideal* — each device settles on the closest it supports). Separate from `TARGET_*` (the server's output); lower them to ease weak or overheating phones. Also selectable live in `/control` from a preset list — connected cameras re-acquire at the new setting. |
+| `CAPTURE_WIDTH` / `CAPTURE_HEIGHT` / `CAPTURE_FPS` | `1920` / `1080` / `60` | Resolution/fps the phones request from getUserMedia (as *ideal* — each device settles on the closest it supports). Separate from `TARGET_*` (the server's output); lower them to ease weak or overheating phones. **Live-adjustable** in `/control` from a preset list (connected cameras re-acquire at the new setting) and persisted. |
 | `RETENTION_DAYS` | *(empty)* | Days to keep clips. Empty = keep everything forever. If set, cleanup runs on startup and then once a day. |
 
 **Infrastructure variables** (already configured by `docker-compose.yml`/`start.sh`; only touch
@@ -209,13 +214,13 @@ services:
 ### Security Note
 
 To be honest: the only obstacle between a stranger on the internet and this system's
-cameras/clips is the **shared password** stored in `data/config.json`. There's no per-person
+cameras/clips is the **shared password** (the `PASSWORD` env var). There's no per-person
 account, invite, or allow-list — whoever has the password (or manages to guess it) sees
 everything. That's acceptable for home use on a closed network (LAN mode), but exposing it to the
 internet changes the risk calculus. Minimum recommendations before exposing it publicly:
 
-- Replace the auto-generated password with a strong one (edit the `password` field in
-  `data/config.json` before starting it up, or stop the container, edit it, and start it again).
+- Set a strong `PASSWORD` in `.env` (the shipped example default is only meant to get a fresh clone
+  running) and restart.
 - Serve **only** HTTPS — that's exactly what the proxy from the section above already guarantees;
   don't expose the `PORT` port (plain HTTP) directly to the internet, only the proxy should be
   public.
