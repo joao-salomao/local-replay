@@ -434,6 +434,7 @@ summary + * {
   display: flex;
   gap: var(--space-2);
   align-items: center;
+  margin-bottom: var(--space-3);
 }
 .log-controls select {
   flex: 1;
