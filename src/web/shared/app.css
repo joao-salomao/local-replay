@@ -463,7 +463,8 @@ summary + * {
 }
 
 #live:fullscreen,
-#live:-webkit-full-screen {
+#live:-webkit-full-screen,
+#live.pseudo-fs {
   width: 100vw;
   height: 100vh;
   max-width: none;
@@ -472,16 +473,39 @@ summary + * {
   justify-content: center;
   background: #000;
 }
+/* The iPhone has no element Fullscreen API, so the card is pinned over the viewport instead of
+ * being handed to the OS. `100dvh` matters here in a way it doesn't for real fullscreen: on iOS
+ * `100vh` is the viewport WITHOUT the Safari chrome, which this mode does not remove, so the card
+ * would overflow by the height of the toolbar. The safe-area padding matters just as much — the
+ * page sets `viewport-fit=cover`, so without it the GRAVAR button in the bottom-left corner lands
+ * under the home indicator, losing the very control this mode exists to keep reachable. `max()`
+ * keeps the card's normal breathing room on devices with no inset to speak of. */
+#live.pseudo-fs {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  height: 100dvh;
+  padding: max(var(--space-2), env(safe-area-inset-top))
+    max(var(--space-2), env(safe-area-inset-right)) max(var(--space-2), env(safe-area-inset-bottom))
+    max(var(--space-2), env(safe-area-inset-left));
+}
 #live:fullscreen .video-stage,
-#live:-webkit-full-screen .video-stage {
+#live:-webkit-full-screen .video-stage,
+#live.pseudo-fs .video-stage {
   flex: 1;
   min-height: 0;
   aspect-ratio: auto;
   border-radius: 0;
 }
 #live:fullscreen select,
-#live:-webkit-full-screen select {
+#live:-webkit-full-screen select,
+#live.pseudo-fs select {
   display: none;
+}
+
+/* Applied to <body> for exactly as long as the pseudo-fullscreen overlay is up (see camera.ts). */
+body.no-scroll {
+  overflow: hidden;
 }
 
 .status-panel {
