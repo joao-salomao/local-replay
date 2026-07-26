@@ -54,4 +54,10 @@ test("record flow: 2 cameras + control → clip in gallery", async ({ context, p
   );
   expect(combined.status()).toBe(200);
   expect(Number(combined.headers()["content-length"] ?? "1")).toBeGreaterThan(100_000);
+
+  // The camera page can call a play on its own — no /control needed. Only the job's creation is
+  // asserted here, not its encode: the pipeline itself is already proven by Lance #1 above, and
+  // waiting out a second ffmpeg run would double an already multi-minute test.
+  await cam1.click("#cam-record");
+  await expect(control.locator("#jobs")).toContainText("Lance #2", { timeout: 10_000 });
 });

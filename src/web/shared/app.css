@@ -424,6 +424,44 @@ summary + * {
   filter: brightness(1.2);
 }
 
+/* Record trigger floating over the live preview, so a phone that's filming can call a play without
+ * navigating away (which would kill its own capture — see camera.ts). Borrows `.fs-toggle`'s glass
+ * treatment so the two overlay controls read as one family, but keeps the danger tint and sits in
+ * the opposite corner, since mistaking it for the fullscreen button would cost a play. The
+ * user-select/touch-callout/tap-highlight resets stop a tap on a phone from being interpreted as a
+ * text selection or an iOS context menu on the label. */
+.cam-record-btn {
+  position: absolute;
+  z-index: 2;
+  left: var(--space-2);
+  bottom: var(--space-2);
+  /* Resets the base <button> rule (full width, tall, green, padded). */
+  width: 4.5rem;
+  min-height: 0;
+  height: 4.5rem;
+  padding: 0;
+  border-radius: var(--radius-pill);
+  background: rgba(218, 54, 51, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.cam-record-btn:hover:not(:disabled) {
+  filter: brightness(1.2);
+}
+/* Wins over the generic `button:disabled` on specificity (0-2-0 vs 0-1-1), so the disabled state
+ * stays translucent glass over the video instead of the opaque grey used inside cards. */
+.cam-record-btn:disabled {
+  background: rgba(13, 17, 23, 0.72);
+  color: var(--color-text-dim);
+}
+
 #live:fullscreen,
 #live:-webkit-full-screen {
   width: 100vw;

@@ -454,6 +454,7 @@ $("start").onclick = async () => {
     onStatus: (connected) => {
       $("conn-dot").classList.toggle("on", connected);
       $("conn-text").textContent = connected ? "Conectado" : "Desconectado";
+      $<HTMLButtonElement>("cam-record").disabled = !connected;
       if (connected) {
         ws.send({ type: "register", role: "camera", name });
         setTimeout(() => startCycle(), 800); // wait for first ntp samples
@@ -470,6 +471,28 @@ $("start").onclick = async () => {
   portrait.addEventListener("change", updateOrientHint);
   updateOrientHint();
   setInterval(reportStatus, 5_000); // fps/resolution drift with heat — keep badge and control live
+};
+
+/**
+ * Record trigger on the camera page. Posts to the same `/api/record` the control page uses (it's
+ * gated by the session cookie only — the server has no notion of client role), so a phone that's
+ * filming can call a play without navigating to `/control`, which would background this page and
+ * kill its capture.
+ *
+ * Nothing local happens on success, deliberately: the server broadcasts the resulting `record` to
+ * TOPIC_CAMERAS, and this connection is one of its subscribers, so the capture runs through
+ * `handleMessage` on exactly the same path as a trigger fired from `/control`. The round trip lands
+ * in milliseconds and `uploadClip` already writes "Enviando lance..." to `#buffer-status`, which is
+ * the confirmation the operator needs.
+ */
+$("cam-record").onclick = async () => {
+  $("record-error").textContent = "";
+  try {
+    await api("/api/record", { method: "POST" });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "erro";
+    $("record-error").textContent = msg === "cooldown" ? "Aguarde um instante entre lances" : msg;
+  }
 };
 
 $<HTMLInputElement>("angle-name").value = localStorage.getItem("angleName") ?? "";
