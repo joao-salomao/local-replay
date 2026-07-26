@@ -60,9 +60,10 @@ After opening the URL, each device enters the password and picks a role:
   warning and recovers the buffer on its own if the tab is hidden or the operating system pauses
   the camera in the background). The page carries its own **GRAVAR** button, floating over the live
   preview, so a phone that's filming can call a play itself without navigating to `/control` —
-  navigating away would background this page and kill its capture. On the iPhone the button is
-  hidden while the native fullscreen video player is up (no HTML survives it); exit fullscreen to
-  press it.
+  navigating away would background this page and kill its capture. Fullscreen keeps the button
+  reachable on every platform: Android and desktop get real OS fullscreen, and the iPhone — which
+  has no element Fullscreen API — gets a page-level fullscreen that still shows the Safari toolbar.
+  "Add to Home Screen" removes that toolbar, which is what the on-page hint suggests.
 - **🔴 Controlar gravação** (Control recording) — the control page: a big **GRAVAR** button, a
   clip duration selector (10/20/30/45/60s), a selector for **which camera's audio** goes into the
   combined video, a **capture resolution/fps** preset picker (applied live to the connected
