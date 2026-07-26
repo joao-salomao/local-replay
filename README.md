@@ -58,7 +58,11 @@ After opening the URL, each device enters the password and picks a role:
   e.g. "Fundo" (back) or "Lateral rede" (net side) — mount the phone on a tripod, **keep it
   plugged in**, and keep the page in the foreground for the whole session (the page shows a
   warning and recovers the buffer on its own if the tab is hidden or the operating system pauses
-  the camera in the background).
+  the camera in the background). The page carries its own **GRAVAR** button, floating over the live
+  preview, so a phone that's filming can call a play itself without navigating to `/control` —
+  navigating away would background this page and kill its capture. On the iPhone the button is
+  hidden while the native fullscreen video player is up (no HTML survives it); exit fullscreen to
+  press it.
 - **🔴 Controlar gravação** (Control recording) — the control page: a big **GRAVAR** button, a
   clip duration selector (10/20/30/45/60s), a selector for **which camera's audio** goes into the
   combined video, a **capture resolution/fps** preset picker (applied live to the connected
@@ -73,9 +77,10 @@ After opening the URL, each device enters the password and picks a role:
   pointing straight to the video file.
 
 **Flow of a play:** the cameras stay connected, filming and buffering the last few seconds
-locally. When someone presses GRAVAR on `/control`, the server records the instant `T`, creates a
-job, and notifies every camera that's online. Each camera finishes the segment in progress and
-sends the buffer files covering the window `[T − duration, T]`. The server waits for the uploads
+locally. When someone presses GRAVAR — on `/control`, or on any filming phone's own camera page —
+the server records the instant `T`, creates a job, and notifies every camera that's online. Each
+camera finishes the segment in progress and sends the buffer files covering the window `[T −
+duration, T]`. The server waits for the uploads
 (up to a configurable timeout — 30s by default, raise it on `/control` for slow Wi‑Fi — whoever
 doesn't deliver in time is left out of the play, which still comes out with the remaining angles),
 processes them with FFmpeg (exact cut, normalization, and combining the
