@@ -481,17 +481,43 @@ $("start").onclick = async () => {
  *
  * Nothing local happens on success, deliberately: the server broadcasts the resulting `record` to
  * TOPIC_CAMERAS, and this connection is one of its subscribers, so the capture runs through
- * `handleMessage` on exactly the same path as a trigger fired from `/control`. The round trip lands
- * in milliseconds and `uploadClip` already writes "Enviando lance..." to `#buffer-status`, which is
- * the confirmation the operator needs.
+ * `handleMessage` on exactly the same path as a trigger fired from `/control`. That path only does
+ * anything visible when a recorder is actively `"recording"` at the instant the broadcast arrives
+ * (see `handleMessage`'s guard) — and only then does `uploadClip` write "Enviando lance..." to
+ * `#buffer-status`, the confirmation the operator is expecting.
+ *
+ * That condition is NOT always true, and this page has three real windows where it fails: the
+ * ~800ms between the WebSocket connecting (which is what enables this very button) and the first
+ * `startCycle()` firing; the whole span of `recoverStream()`, which nulls `recorder` before an
+ * `acquireMedia()` call that can take seconds on iOS; and the instant right after a
+ * `visibilitychange` restart, before the fresh cycle's recorder exists. Tap in one of those windows
+ * and the job is still created server-side — the operator just sees no local confirmation of it.
+ *
+ * We deliberately do NOT guard the POST on `recorder?.state === "recording"` to close this gap:
+ * other cameras may well be online and actively recording, and the play must still be captured from
+ * their angles. Skipping the request whenever THIS camera happens to be between cycles would
+ * silently cost a valid play instead of just costing this camera its confirmation of one.
  */
+// The server's trigger() only ever returns these two error strings (see clip-job.ts#trigger) —
+// a small lookup keeps this readable as the set grows, and falls back to the raw string for
+// anything unforeseen rather than hiding it.
+const RECORD_ERROR_COPY: Record<string, string> = {
+  cooldown: "Aguarde um instante entre lances",
+  // Unlike on /control (where the button is disabled while no camera is online, making this
+  // fallback effectively dead), this page's button is gated only by WebSocket connectivity: after
+  // `hub.sweep` marks this very camera offline (10s of silence — easy to hit when a backgrounded
+  // tab's heartbeat interval gets throttled while the socket itself stays open), a tap before the
+  // next heartbeat lands can reach the server before it sees this camera as online again.
+  "no-cameras": "Câmera ainda não registrada — tente de novo",
+};
+
 $("cam-record").onclick = async () => {
   $("record-error").textContent = "";
   try {
     await api("/api/record", { method: "POST" });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "erro";
-    $("record-error").textContent = msg === "cooldown" ? "Aguarde um instante entre lances" : msg;
+    $("record-error").textContent = RECORD_ERROR_COPY[msg] ?? msg;
   }
 };
 

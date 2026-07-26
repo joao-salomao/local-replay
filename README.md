@@ -76,16 +76,15 @@ After opening the URL, each device enters the password and picks a role:
   share menu, with a fallback to download on browsers without that API), and a QR code per clip
   pointing straight to the video file.
 
-**Flow of a play:** the cameras stay connected, filming and buffering the last few seconds
-locally. When someone presses GRAVAR — on `/control`, or on any filming phone's own camera page —
-the server records the instant `T`, creates a job, and notifies every camera that's online. Each
-camera finishes the segment in progress and sends the buffer files covering the window `[T −
-duration, T]`. The server waits for the uploads
-(up to a configurable timeout — 30s by default, raise it on `/control` for slow Wi‑Fi — whoever
-doesn't deliver in time is left out of the play, which still comes out with the remaining angles),
-processes them with FFmpeg (exact cut, normalization, and combining the
-angles two ways — one after another, and all at once in a side-by-side grid), and the clip appears
-in `/clips`; `/control` shows "Lance pronto" (Play ready).
+**Flow of a play:** the cameras stay connected, filming and buffering the last few seconds locally.
+When someone presses GRAVAR — on `/control`, or on any filming phone's own camera page — the server
+records the instant `T`, creates a job, and notifies every camera that's online. Each camera
+finishes the segment in progress and sends the buffer files covering the window `[T − duration, T]`.
+The server waits for the uploads (up to a configurable timeout — 30s by default, raise it on
+`/control` for slow Wi‑Fi — whoever doesn't deliver in time is left out of the play, which still
+comes out with the remaining angles), processes them with FFmpeg (exact cut, normalization, and
+combining the angles two ways — one after another, and all at once in a side-by-side grid), and the
+clip appears in `/clips`; `/control` shows "Lance pronto" (Play ready).
 
 ## Connecting Each Device
 
@@ -317,7 +316,7 @@ data/
 | Situation | Expected behavior |
 |---|---|
 | Camera loses Wi-Fi / tab suspended | Disappears from the list in `/control` within ~10s (heartbeat every 3s, considered offline after 10s with no signal); when it comes back, it reconnects and restarts its buffer on its own |
-| GRAVAR with no camera online | Button is disabled, with a warning |
+| GRAVAR with no camera online | On `/control`, the button is disabled, with a warning. On `/camera`, the button is only gated by the WebSocket connection (the filming phone is itself a camera), so this case there is really "server rejects the trigger" (e.g. this camera dropped offline per the heartbeat and hasn't re-registered yet) — the page shows the server's `no-cameras` message translated in `#record-error` |
 | One camera's upload fails | 3 attempts with backoff; the play still closes with whichever angles arrived within the 30s timeout |
 | FFmpeg fails on one angle | Publishes the angles that succeeded; error logged in `meta.json` and in the server log |
 | Disk has less than 5 GB free | Warning appears in `/control` and `/clips` |

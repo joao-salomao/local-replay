@@ -55,9 +55,22 @@ test("record flow: 2 cameras + control → clip in gallery", async ({ context, p
   expect(combined.status()).toBe(200);
   expect(Number(combined.headers()["content-length"] ?? "1")).toBeGreaterThan(100_000);
 
-  // The camera page can call a play on its own — no /control needed. Only the job's creation is
-  // asserted here, not its encode: the pipeline itself is already proven by Lance #1 above, and
-  // waiting out a second ffmpeg run would double an already multi-minute test.
+  // The camera page can call a play on its own — no /control needed. Only the job's creation and
+  // its cam1 upload are asserted here, not the full encode: the pipeline itself is already proven
+  // by Lance #1 above, and waiting out a second ffmpeg run would double an already multi-minute test.
   await cam1.click("#cam-record");
+  // Proves the POST reaches the server and creates a job — kept separate from the assertion below
+  // so a missing job (vs. a missing upload) fails with a cleaner, more specific message.
   await expect(control.locator("#jobs")).toContainText("Lance #2", { timeout: 10_000 });
+  // Proves the load-bearing claim this feature depends on: the `record` broadcast comes back to the
+  // *triggering* camera (cam1), which is subscribed to TOPIC_CAMERAS like any other camera, and its
+  // own handleMessage path stops the in-flight recorder and uploads. "Lance #2" alone doesn't prove
+  // this — it only proves the trigger reached the server, not that cam1 ever received the broadcast
+  // back. `finalize()` only advances the job past "capturing" once every expected camera (both cam1
+  // and cam2) has delivered its upload, so seeing "processando" here is only possible if cam1's
+  // upload actually landed. 15s is comfortably below the 30s fallback upload timeout, so a pass
+  // here cannot be explained by the timeout silently finalizing the job without cam1's angle.
+  await expect(control.locator("#jobs")).toContainText("Lance #2 — processando", {
+    timeout: 15_000,
+  });
 });
