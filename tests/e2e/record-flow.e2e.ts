@@ -67,10 +67,14 @@ test("record flow: 2 cameras + control → clip in gallery", async ({ context, p
   // own handleMessage path stops the in-flight recorder and uploads. "Lance #2" alone doesn't prove
   // this — it only proves the trigger reached the server, not that cam1 ever received the broadcast
   // back. `finalize()` only advances the job past "capturing" once every expected camera (both cam1
-  // and cam2) has delivered its upload, so seeing "processando" here is only possible if cam1's
-  // upload actually landed. 15s is comfortably below the 30s fallback upload timeout, so a pass
-  // here cannot be explained by the timeout silently finalizing the job without cam1's angle.
-  await expect(control.locator("#jobs")).toContainText("Lance #2 — processando", {
+  // and cam2) has delivered its upload, so seeing either later state here is only possible if cam1's
+  // upload actually landed — "capturando" is the only state that wouldn't prove it, and the regex
+  // excludes it. Matching either "processando" or "pronto" (rather than "processando" alone) keeps
+  // this from being a false failure if encoding ever becomes fast enough to finish between two
+  // Playwright polls: today it takes minutes, but that's an implementation detail, not a guarantee.
+  // 15s is comfortably below the 30s fallback upload timeout, so a pass here cannot be explained by
+  // the timeout silently finalizing the job without cam1's angle.
+  await expect(control.locator("#jobs")).toContainText(/Lance #2 — (processando|pronto)/, {
     timeout: 15_000,
   });
 });

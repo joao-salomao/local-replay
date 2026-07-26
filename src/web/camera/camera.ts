@@ -417,8 +417,12 @@ document.addEventListener("webkitfullscreenchange", updateFsLabel);
 
 // Not on the element-fullscreen path (iPhone) and not already launched from the home screen: point
 // the operator at standalone mode, the only way to actually get rid of the Safari chrome. The
-// button itself is never hidden any more — pseudo-fullscreen works everywhere, so there is no
-// longer a "fullscreen genuinely unavailable" case to handle.
+// button itself is never hidden any more — feature detection always yields a working path (real
+// fullscreen or pseudo), so there is no longer a "fullscreen genuinely unavailable" case to handle
+// at setup time. That's not the same as every *runtime* call succeeding: on the element path a
+// `requestFullscreen()` rejection (permissions-policy, an iframe without `allow="fullscreen"`) is
+// still swallowed by the try/catch above and degrades to a silent no-op — this app is never framed
+// so the case doesn't occur here, but the button staying visible doesn't mean it's guaranteed to work.
 if (!canElementFs && !(navigator as Navigator & { standalone?: boolean }).standalone) {
   $("fs-hint").hidden = false;
 }
@@ -497,9 +501,13 @@ $("start").onclick = async () => {
  * their angles. Skipping the request whenever THIS camera happens to be between cycles would
  * silently cost a valid play instead of just costing this camera its confirmation of one.
  */
-// The server's trigger() only ever returns these two error strings (see clip-job.ts#trigger) —
-// a small lookup keeps this readable as the set grows, and falls back to the raw string for
-// anything unforeseen rather than hiding it.
+// The server's trigger() itself only ever returns these two error strings (see
+// clip-job.ts#trigger) — but `api()` also surfaces errors from the ROUTE, not just from
+// trigger(): `requireAuth` returns "unauthorized" on an expired session, and a network failure
+// yields the browser's own message (e.g. Safari's "Load failed"). A small lookup keeps the known
+// cases readable as the set grows, and falls back to the raw string for anything unforeseen
+// rather than hiding it — realistic here, since a court is exactly where the server might get
+// restarted mid-game.
 const RECORD_ERROR_COPY: Record<string, string> = {
   cooldown: "Aguarde um instante entre lances",
   // Unlike on /control (where the button is disabled while no camera is online, making this
@@ -508,6 +516,7 @@ const RECORD_ERROR_COPY: Record<string, string> = {
   // tab's heartbeat interval gets throttled while the socket itself stays open), a tap before the
   // next heartbeat lands can reach the server before it sees this camera as online again.
   "no-cameras": "Câmera ainda não registrada — tente de novo",
+  unauthorized: "Sessão expirada — recarregue a página",
 };
 
 $("cam-record").onclick = async () => {

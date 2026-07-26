@@ -274,6 +274,13 @@ emergency with `git push --no-verify`.
 > limitation — not a bug in the app. Run it on a machine/CI where the fake camera is actually
 > granted, to validate the end-to-end flow.
 
+> **`BEHIND_PROXY` and e2e don't mix:** `playwright.config.ts`'s `webServer` entries start the app
+> in plain LAN mode (self-signed HTTPS on `localhost:8543`/`8544`). If your local `.env` sets
+> `BEHIND_PROXY=1`, that turns off the self-signed cert and HTTPS listener entirely (see
+> [Configuration](#configuration)), so the webServer never comes up on the HTTPS URL Playwright is
+> waiting for, and the run times out with no useful hint pointing at the cause. Run e2e with
+> `BEHIND_PROXY=0 bun run test:e2e` whenever your `.env` enables proxy mode.
+
 ## Court Checklist
 
 Manual validation recommended before relying on the system for a real game:
@@ -317,7 +324,8 @@ data/
 | Situation | Expected behavior |
 |---|---|
 | Camera loses Wi-Fi / tab suspended | Disappears from the list in `/control` within ~10s (heartbeat every 3s, considered offline after 10s with no signal); when it comes back, it reconnects and restarts its buffer on its own |
-| GRAVAR with no camera online | On `/control`, the button is disabled, with a warning. On `/camera`, the button is only gated by the WebSocket connection (the filming phone is itself a camera), so this case there is really "server rejects the trigger" (e.g. this camera dropped offline per the heartbeat and hasn't re-registered yet) — the page shows the server's `no-cameras` message translated in `#record-error` |
+| GRAVAR with no camera online, on `/control` | Button is disabled, with a warning |
+| GRAVAR with no camera online, on `/camera` | Button is gated only by the WebSocket connection, so the server rejects the trigger; the page shows a translated error message |
 | One camera's upload fails | 3 attempts with backoff; the play still closes with whichever angles arrived within the 30s timeout |
 | FFmpeg fails on one angle | Publishes the angles that succeeded; error logged in `meta.json` and in the server log |
 | Disk has less than 5 GB free | Warning appears in `/control` and `/clips` |
