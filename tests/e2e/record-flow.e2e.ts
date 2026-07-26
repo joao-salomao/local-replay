@@ -54,4 +54,16 @@ test("record flow: 2 cameras + control → clip in gallery", async ({ context, p
   );
   expect(combined.status()).toBe(200);
   expect(Number(combined.headers()["content-length"] ?? "1")).toBeGreaterThan(100_000);
+
+  // The camera page can call a play on its own — no /control needed. The full encode is not
+  // awaited: Lance #1 above already proves the pipeline.
+  await cam1.click("#cam-record");
+  await expect(control.locator("#jobs")).toContainText("Lance #2", { timeout: 10_000 });
+  // Proves the broadcast comes back to the *triggering* camera, which "Lance #2" alone does not:
+  // the job only leaves "capturando" once every camera has uploaded, so any later state means
+  // cam1's own upload landed. 15s stays below the 30s fallback upload timeout, which would
+  // otherwise finalize the job without cam1's angle and make this pass for the wrong reason.
+  await expect(control.locator("#jobs")).toContainText(/Lance #2 — (processando|pronto)/, {
+    timeout: 15_000,
+  });
 });

@@ -58,7 +58,12 @@ After opening the URL, each device enters the password and picks a role:
   e.g. "Fundo" (back) or "Lateral rede" (net side) — mount the phone on a tripod, **keep it
   plugged in**, and keep the page in the foreground for the whole session (the page shows a
   warning and recovers the buffer on its own if the tab is hidden or the operating system pauses
-  the camera in the background).
+  the camera in the background). The page carries its own **GRAVAR** button, floating over the live
+  preview, so a phone that's filming can call a play itself without navigating to `/control` —
+  navigating away would background this page and kill its capture. Fullscreen keeps the button
+  reachable on every platform: Android and desktop get real OS fullscreen, and the iPhone — which
+  has no element Fullscreen API — gets a page-level fullscreen that still shows the Safari toolbar.
+  "Add to Home Screen" removes that toolbar, which is what the on-page hint suggests.
 - **🔴 Controlar gravação** (Control recording) — the control page: a big **GRAVAR** button, a
   clip duration selector (10/20/30/45/60s), a selector for **which camera's audio** goes into the
   combined video, a **capture resolution/fps** preset picker (applied live to the connected
@@ -72,15 +77,15 @@ After opening the URL, each device enters the password and picks a role:
   share menu, with a fallback to download on browsers without that API), and a QR code per clip
   pointing straight to the video file.
 
-**Flow of a play:** the cameras stay connected, filming and buffering the last few seconds
-locally. When someone presses GRAVAR on `/control`, the server records the instant `T`, creates a
-job, and notifies every camera that's online. Each camera finishes the segment in progress and
-sends the buffer files covering the window `[T − duration, T]`. The server waits for the uploads
-(up to a configurable timeout — 30s by default, raise it on `/control` for slow Wi‑Fi — whoever
-doesn't deliver in time is left out of the play, which still comes out with the remaining angles),
-processes them with FFmpeg (exact cut, normalization, and combining the
-angles two ways — one after another, and all at once in a side-by-side grid), and the clip appears
-in `/clips`; `/control` shows "Lance pronto" (Play ready).
+**Flow of a play:** the cameras stay connected, filming and buffering the last few seconds locally.
+When someone presses GRAVAR — on `/control`, or on any filming phone's own camera page — the server
+records the instant `T`, creates a job, and notifies every camera that's online. Each camera
+finishes the segment in progress and sends the buffer files covering the window `[T − duration, T]`.
+The server waits for the uploads (up to a configurable timeout — 30s by default, raise it on
+`/control` for slow Wi‑Fi — whoever doesn't deliver in time is left out of the play, which still
+comes out with the remaining angles), processes them with FFmpeg (exact cut, normalization, and
+combining the angles two ways — one after another, and all at once in a side-by-side grid), and the
+clip appears in `/clips`; `/control` shows "Lance pronto" (Play ready).
 
 ## Connecting Each Device
 
@@ -269,6 +274,13 @@ emergency with `git push --no-verify`.
 > limitation — not a bug in the app. Run it on a machine/CI where the fake camera is actually
 > granted, to validate the end-to-end flow.
 
+> **`BEHIND_PROXY` and e2e don't mix:** `playwright.config.ts`'s `webServer` entries start the app
+> in plain LAN mode (self-signed HTTPS on `localhost:8543`/`8544`). If your local `.env` sets
+> `BEHIND_PROXY=1`, that turns off the self-signed cert and HTTPS listener entirely (see
+> [Configuration](#configuration)), so the webServer never comes up on the HTTPS URL Playwright is
+> waiting for, and the run times out with no useful hint pointing at the cause. Run e2e with
+> `BEHIND_PROXY=0 bun run test:e2e` whenever your `.env` enables proxy mode.
+
 ## Court Checklist
 
 Manual validation recommended before relying on the system for a real game:
@@ -312,7 +324,8 @@ data/
 | Situation | Expected behavior |
 |---|---|
 | Camera loses Wi-Fi / tab suspended | Disappears from the list in `/control` within ~10s (heartbeat every 3s, considered offline after 10s with no signal); when it comes back, it reconnects and restarts its buffer on its own |
-| GRAVAR with no camera online | Button is disabled, with a warning |
+| GRAVAR with no camera online, on `/control` | Button is disabled, with a warning |
+| GRAVAR with no camera online, on `/camera` | Button is gated only by the WebSocket connection, so the server rejects the trigger; the page shows a translated error message |
 | One camera's upload fails | 3 attempts with backoff; the play still closes with whichever angles arrived within the 30s timeout |
 | FFmpeg fails on one angle | Publishes the angles that succeeded; error logged in `meta.json` and in the server log |
 | Disk has less than 5 GB free | Warning appears in `/control` and `/clips` |

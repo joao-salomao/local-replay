@@ -351,14 +351,13 @@ document.addEventListener("visibilitychange", () => {
 /**
  * Fullscreen toggle for the live camera view (`#live`) — lets the operator make full use of a
  * phone mounted on a tripod: a bigger preview with minimal chrome. Wired once at module load,
- * independent of camera/stream state (it only touches the Fullscreen API and DOM, never `stream`
- * or `recorder`). Feature-detected against both the standard and older WebKit-prefixed APIs (iOS
- * Safari on the iPhone exposes NO element Fullscreen API at all, only `<video>.webkitEnterFullscreen`),
- * so on iPhone it falls back to fullscreening the preview `<video>`; the button is hidden only when
- * even that is unavailable. Every request/exit call is wrapped in try/catch so a runtime rejection
- * (e.g. a permissions-policy block, or the video not yet playing) degrades to a silent no-op.
- * Note: the most chromeless iPhone experience is "Add to Home Screen" (standalone mode, enabled by
- * the `apple-mobile-web-app-capable` meta on this page), since iOS has no true element fullscreen.
+ * independent of camera/stream state (it only touches the DOM, never `stream` or `recorder`).
+ *
+ * Real element fullscreen where it exists; a CSS overlay (`.pseudo-fs`) on the iPhone, which
+ * exposes no element Fullscreen API at all. The iPhone's only native fullscreen is
+ * `<video>.webkitEnterFullscreen()`, which runs OUTSIDE the page: it hid the GRAVAR button and made
+ * the `<video>`'s `muted` stop applying, leaking the mic audio. The overlay is not true fullscreen
+ * — the Safari chrome stays, which is what `#fs-hint` is for.
  */
 type FullscreenTarget = HTMLElement & { webkitRequestFullscreen?: () => Promise<void> };
 type FullscreenDoc = Document & {
@@ -369,59 +368,43 @@ type FullscreenDoc = Document & {
 const isFullscreenActive = (): boolean =>
   !!(document.fullscreenElement ?? (document as FullscreenDoc).webkitFullscreenElement);
 
-// iOS Safari on the iPHONE has no element Fullscreen API at all — `requestFullscreen`
-// simply doesn't exist on any element. The one thing iOS lets go fullscreen is a `<video>`,
-// via the WebKit-only `video.webkitEnterFullscreen()` (the native iOS video player). So on
-// iPhone we fall back to fullscreening the live preview video itself. (iPadOS and Android/desktop
-// use the standard element Fullscreen API on the whole `#live` card, which is nicer.)
-type IosVideo = HTMLVideoElement & {
-  webkitEnterFullscreen?: () => void;
-  webkitDisplayingFullscreen?: boolean;
-};
-
 const fsTarget = $<FullscreenTarget>("live");
 const fsToggle = $("fullscreen-toggle");
-const fsVideo = $<IosVideo>("preview");
 const canElementFs = !!(fsTarget.requestFullscreen || fsTarget.webkitRequestFullscreen);
-const canVideoFs = !canElementFs && typeof fsVideo.webkitEnterFullscreen === "function";
 
-if (!canElementFs && !canVideoFs) {
-  fsToggle.hidden = true; // Fullscreen genuinely unavailable: no dead control shown
-} else {
-  const updateFsLabel = () => {
-    const active = isFullscreenActive() || !!fsVideo.webkitDisplayingFullscreen;
-    fsToggle.textContent = active ? "✕ Sair da tela cheia" : "⛶ Tela cheia";
-  };
-  fsToggle.onclick = async () => {
-    try {
-      if (canElementFs) {
-        if (isFullscreenActive()) {
-          await (document.exitFullscreen?.() ??
-            (document as FullscreenDoc).webkitExitFullscreen?.());
-        } else {
-          await (fsTarget.requestFullscreen?.() ?? fsTarget.webkitRequestFullscreen?.());
-        }
+const updateFsLabel = () => {
+  const active = isFullscreenActive() || fsTarget.classList.contains("pseudo-fs");
+  fsToggle.textContent = active ? "✕ Sair da tela cheia" : "⛶ Tela cheia";
+};
+
+fsToggle.onclick = async () => {
+  try {
+    if (canElementFs) {
+      if (isFullscreenActive()) {
+        await (document.exitFullscreen?.() ?? (document as FullscreenDoc).webkitExitFullscreen?.());
       } else {
-        // iPhone: only the video element can go fullscreen; exit is via the native player's
-        // "Done" button (no reliable programmatic exit), so this only ever enters.
-        fsVideo.webkitEnterFullscreen?.();
+        await (fsTarget.requestFullscreen?.() ?? fsTarget.webkitRequestFullscreen?.());
       }
-    } catch {
-      /* Fullscreen unavailable/denied at runtime (e.g. video not yet playing): no-op */
+      return; // `fullscreenchange` fires updateFsLabel for this path
     }
-  };
-  document.addEventListener("fullscreenchange", updateFsLabel);
-  document.addEventListener("webkitfullscreenchange", updateFsLabel);
-  // iOS video fullscreen fires its own begin/end events on the <video>, not on document.
-  fsVideo.addEventListener("webkitbeginfullscreen", updateFsLabel);
-  fsVideo.addEventListener("webkitendfullscreen", updateFsLabel);
-
-  // On iPhone (video-fs path) and not already launched from the home screen, point the operator
-  // at the reliable chromeless option — video fullscreen may not cover a live getUserMedia stream
-  // on every iOS version, whereas standalone mode always removes the Safari chrome.
-  if (canVideoFs && !(navigator as Navigator & { standalone?: boolean }).standalone) {
-    $("fs-hint").hidden = false;
+    // This button is the only way in or out of the overlay — there is no event to subscribe to —
+    // so the label is updated inline. `body.no-scroll` stops the page scrolling behind the card.
+    const entering = !fsTarget.classList.contains("pseudo-fs");
+    fsTarget.classList.toggle("pseudo-fs", entering);
+    document.body.classList.toggle("no-scroll", entering);
+    updateFsLabel();
+  } catch {
+    /* Fullscreen unavailable/denied at runtime: no-op */
   }
+};
+document.addEventListener("fullscreenchange", updateFsLabel);
+document.addEventListener("webkitfullscreenchange", updateFsLabel);
+
+// iPhone outside standalone mode: point the operator at "Add to Home Screen", the only way to
+// actually remove the Safari chrome. The toggle itself is never hidden — feature detection always
+// yields a working path.
+if (!canElementFs && !(navigator as Navigator & { standalone?: boolean }).standalone) {
+  $("fs-hint").hidden = false;
 }
 
 $("start").onclick = async () => {
@@ -454,6 +437,7 @@ $("start").onclick = async () => {
     onStatus: (connected) => {
       $("conn-dot").classList.toggle("on", connected);
       $("conn-text").textContent = connected ? "Conectado" : "Desconectado";
+      $<HTMLButtonElement>("cam-record").disabled = !connected;
       if (connected) {
         ws.send({ type: "register", role: "camera", name });
         setTimeout(() => startCycle(), 800); // wait for first ntp samples
@@ -470,6 +454,41 @@ $("start").onclick = async () => {
   portrait.addEventListener("change", updateOrientHint);
   updateOrientHint();
   setInterval(reportStatus, 5_000); // fps/resolution drift with heat — keep badge and control live
+};
+
+/**
+ * Record trigger on the camera page. Posts to the same `/api/record` the control page uses (it's
+ * gated by the session cookie only — the server has no notion of client role), so a phone that's
+ * filming can call a play without navigating to `/control`, which would background this page and
+ * kill its capture.
+ *
+ * Nothing local happens on success: the server broadcasts the resulting `record` to TOPIC_CAMERAS,
+ * which this connection subscribes to, so the capture runs through `handleMessage` exactly as it
+ * would for a trigger fired from `/control`. That path is a no-op unless a recorder is `"recording"`
+ * when the broadcast arrives, so the operator sometimes gets no local confirmation — between
+ * cycles, or during `recoverStream()`. Do NOT guard the POST on that: other cameras may be
+ * recording, and the play still has to be captured from their angles.
+ */
+// `api()` surfaces the ROUTE's errors too, not just trigger()'s: `requireAuth` returns
+// "unauthorized" on an expired session, and a network failure yields the browser's own message.
+// Unknown strings fall through raw rather than being hidden.
+const RECORD_ERROR_COPY: Record<string, string> = {
+  cooldown: "Aguarde um instante entre lances",
+  // Reachable here, unlike on /control (disabled while no camera is online): this page's button is
+  // gated only by WebSocket connectivity, so a tap can land after `hub.sweep` marked this camera
+  // offline (10s of silence) and before its next heartbeat.
+  "no-cameras": "Câmera ainda não registrada — tente de novo",
+  unauthorized: "Sessão expirada — recarregue a página",
+};
+
+$("cam-record").onclick = async () => {
+  $("record-error").textContent = "";
+  try {
+    await api("/api/record", { method: "POST" });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "erro";
+    $("record-error").textContent = RECORD_ERROR_COPY[msg] ?? msg;
+  }
 };
 
 $<HTMLInputElement>("angle-name").value = localStorage.getItem("angleName") ?? "";
