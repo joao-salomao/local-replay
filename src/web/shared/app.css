@@ -491,8 +491,8 @@ summary + * {
  * would overflow by the height of the toolbar. The safe-area padding matters just as much — the
  * page sets `viewport-fit=cover`, so without it the bottom of `.status-panel` (specifically
  * `#record-error`, its last line) lands under the home indicator. (The GRAVAR button itself is in
- * no such danger: it's absolutely positioned inside `.video-stage`, the first flex child of
- * `#live`, well above the card's bottom edge.) `max()` keeps the card's normal breathing room on
+ * no such danger: it's absolutely positioned inside `.video-stage`, which the status panel sits
+ * below, so it never reaches the card's bottom edge.) `max()` keeps the card's normal breathing room on
  * devices with no inset to speak of. */
 #live.pseudo-fs {
   width: 100vw;
