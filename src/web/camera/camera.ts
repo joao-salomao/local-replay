@@ -353,23 +353,11 @@ document.addEventListener("visibilitychange", () => {
  * phone mounted on a tripod: a bigger preview with minimal chrome. Wired once at module load,
  * independent of camera/stream state (it only touches the DOM, never `stream` or `recorder`).
  *
- * Two paths, because the iPhone has neither of the things every other platform offers:
- *
- * 1. **Element Fullscreen API** (Android, desktop, iPadOS) — standard or WebKit-prefixed
- *    `requestFullscreen` on the `#live` card. Real OS fullscreen, and the card's own children come
- *    along, including the GRAVAR button.
- * 2. **CSS pseudo-fullscreen** (iPhone) — `#live` gets `.pseudo-fs` and covers the viewport with
- *    `position: fixed`. iOS Safari on the iPhone exposes NO element Fullscreen API at all, and the
- *    only fullscreen it offers is `<video>.webkitEnterFullscreen()` — the native iOS player, which
- *    runs OUTSIDE the page. That player used to be this fallback and cost us both things this page
- *    depends on: no HTML survives it (the GRAVAR button vanishes mid-game) and the `<video>`'s
- *    `muted` stops applying (the mic audio leaks out of the speaker). Keeping everything inside the
- *    document fixes both at once. It is NOT true fullscreen — the Safari chrome stays — which is
- *    why `#fs-hint` still points iPhone operators at "Add to Home Screen" (standalone mode, enabled
- *    by the `apple-mobile-web-app-capable` meta) when they want a genuinely chromeless view.
- *
- * The request/exit calls are wrapped in try/catch so a runtime rejection (e.g. a permissions-policy
- * block) degrades to a silent no-op.
+ * Real element fullscreen where it exists; a CSS overlay (`.pseudo-fs`) on the iPhone, which
+ * exposes no element Fullscreen API at all. The iPhone's only native fullscreen is
+ * `<video>.webkitEnterFullscreen()`, which runs OUTSIDE the page: it hid the GRAVAR button and made
+ * the `<video>`'s `muted` stop applying, leaking the mic audio. The overlay is not true fullscreen
+ * — the Safari chrome stays, which is what `#fs-hint` is for.
  */
 type FullscreenTarget = HTMLElement & { webkitRequestFullscreen?: () => Promise<void> };
 type FullscreenDoc = Document & {
@@ -399,11 +387,8 @@ fsToggle.onclick = async () => {
       }
       return; // `fullscreenchange` fires updateFsLabel for this path
     }
-    // Pseudo-fullscreen: this button is the only way in or out (no Esc key on a phone, no back
-    // gesture, and no event to subscribe to), so the label is updated inline instead of by a
-    // listener. `body.no-scroll` lasts exactly as long as the overlay: without it the page keeps
-    // scrolling behind the fixed card and the operator can drag the content out of view with no
-    // visible cause.
+    // This button is the only way in or out of the overlay — there is no event to subscribe to —
+    // so the label is updated inline. `body.no-scroll` stops the page scrolling behind the card.
     const entering = !fsTarget.classList.contains("pseudo-fs");
     fsTarget.classList.toggle("pseudo-fs", entering);
     document.body.classList.toggle("no-scroll", entering);
@@ -415,14 +400,9 @@ fsToggle.onclick = async () => {
 document.addEventListener("fullscreenchange", updateFsLabel);
 document.addEventListener("webkitfullscreenchange", updateFsLabel);
 
-// Not on the element-fullscreen path (iPhone) and not already launched from the home screen: point
-// the operator at standalone mode, the only way to actually get rid of the Safari chrome. The
-// button itself is never hidden any more — feature detection always yields a working path (real
-// fullscreen or pseudo), so there is no longer a "fullscreen genuinely unavailable" case to handle
-// at setup time. That's not the same as every *runtime* call succeeding: on the element path a
-// `requestFullscreen()` rejection (permissions-policy, an iframe without `allow="fullscreen"`) is
-// still swallowed by the try/catch above and degrades to a silent no-op — this app is never framed
-// so the case doesn't occur here, but the button staying visible doesn't mean it's guaranteed to work.
+// iPhone outside standalone mode: point the operator at "Add to Home Screen", the only way to
+// actually remove the Safari chrome. The toggle itself is never hidden — feature detection always
+// yields a working path.
 if (!canElementFs && !(navigator as Navigator & { standalone?: boolean }).standalone) {
   $("fs-hint").hidden = false;
 }
@@ -482,39 +462,21 @@ $("start").onclick = async () => {
  * filming can call a play without navigating to `/control`, which would background this page and
  * kill its capture.
  *
- * Nothing local happens on success, deliberately: the server broadcasts the resulting `record` to
- * TOPIC_CAMERAS, and this connection is one of its subscribers, so the capture runs through
- * `handleMessage` on exactly the same path as a trigger fired from `/control`. That path only does
- * anything visible when a recorder is actively `"recording"` at the instant the broadcast arrives
- * (see `handleMessage`'s guard) — and only then does `uploadClip` write "Enviando lance..." to
- * `#buffer-status`, the confirmation the operator is expecting.
- *
- * That condition is NOT always true, and this page has three real windows where it fails: the
- * ~800ms between the WebSocket connecting (which is what enables this very button) and the first
- * `startCycle()` firing; the whole span of `recoverStream()`, which nulls `recorder` before an
- * `acquireMedia()` call that can take seconds on iOS; and the instant right after a
- * `visibilitychange` restart, before the fresh cycle's recorder exists. Tap in one of those windows
- * and the job is still created server-side — the operator just sees no local confirmation of it.
- *
- * We deliberately do NOT guard the POST on `recorder?.state === "recording"` to close this gap:
- * other cameras may well be online and actively recording, and the play must still be captured from
- * their angles. Skipping the request whenever THIS camera happens to be between cycles would
- * silently cost a valid play instead of just costing this camera its confirmation of one.
+ * Nothing local happens on success: the server broadcasts the resulting `record` to TOPIC_CAMERAS,
+ * which this connection subscribes to, so the capture runs through `handleMessage` exactly as it
+ * would for a trigger fired from `/control`. That path is a no-op unless a recorder is `"recording"`
+ * when the broadcast arrives, so the operator sometimes gets no local confirmation — between
+ * cycles, or during `recoverStream()`. Do NOT guard the POST on that: other cameras may be
+ * recording, and the play still has to be captured from their angles.
  */
-// The server's trigger() itself only ever returns these two error strings (see
-// clip-job.ts#trigger) — but `api()` also surfaces errors from the ROUTE, not just from
-// trigger(): `requireAuth` returns "unauthorized" on an expired session, and a network failure
-// yields the browser's own message (e.g. Safari's "Load failed"). A small lookup keeps the known
-// cases readable as the set grows, and falls back to the raw string for anything unforeseen
-// rather than hiding it — realistic here, since a court is exactly where the server might get
-// restarted mid-game.
+// `api()` surfaces the ROUTE's errors too, not just trigger()'s: `requireAuth` returns
+// "unauthorized" on an expired session, and a network failure yields the browser's own message.
+// Unknown strings fall through raw rather than being hidden.
 const RECORD_ERROR_COPY: Record<string, string> = {
   cooldown: "Aguarde um instante entre lances",
-  // Unlike on /control (where the button is disabled while no camera is online, making this
-  // fallback effectively dead), this page's button is gated only by WebSocket connectivity: after
-  // `hub.sweep` marks this very camera offline (10s of silence — easy to hit when a backgrounded
-  // tab's heartbeat interval gets throttled while the socket itself stays open), a tap before the
-  // next heartbeat lands can reach the server before it sees this camera as online again.
+  // Reachable here, unlike on /control (disabled while no camera is online): this page's button is
+  // gated only by WebSocket connectivity, so a tap can land after `hub.sweep` marked this camera
+  // offline (10s of silence) and before its next heartbeat.
   "no-cameras": "Câmera ainda não registrada — tente de novo",
   unauthorized: "Sessão expirada — recarregue a página",
 };
