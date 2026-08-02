@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { copyFileSync, mkdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
@@ -7,10 +8,58 @@ export type PageAssets = {
   assetFile(name: string): string | null;
 };
 
+// Everything under `web/assets` — the stylesheet, the favicon set, the PWA icons and manifest.
+// Copied rather than bundled: nothing imports these, they're referenced by URL from the HTML
+// shells and from the manifest. That is what the directory means, and the split against
+// `web/shared` is what keeps this list honest — `shared` holds modules the pages import, `assets`
+// holds files served verbatim, so a file's location tells you how it reaches the browser.
+const STATIC_ASSETS = [
+  "app.css",
+  "favicon.svg",
+  "favicon-16.png",
+  "favicon-32.png",
+  "apple-touch-icon.png",
+  "icon-192.png",
+  "icon-512.png",
+  "icon-maskable-512.png",
+  "manifest.webmanifest",
+];
+
 // Explicit allowlist of servable built filenames. `assetFile` is reachable via routes.ts's
 // `/assets/:name` with a user-supplied `:name` — an allowlist is a simpler, stronger guard than
 // trying to path-traversal-proof an arbitrary filename, and is checked independently of it.
-const ASSET_WHITELIST = new Set(["login.js", "camera.js", "control.js", "clips.js", "app.css"]);
+const ASSET_WHITELIST = new Set([
+  "login.js",
+  "camera.js",
+  "control.js",
+  "clips.js",
+  ...STATIC_ASSETS,
+]);
+
+/** Content hash, short enough to keep URLs readable — this only has to change when bytes do, so
+ * it needs no cryptographic strength and no collision headroom beyond a build's handful of files. */
+const versionOf = (path: string) =>
+  createHash("sha1").update(readFileSync(path)).digest("hex").slice(0, 8);
+
+/**
+ * Rewrites every `/assets/<name>` URL in `html` to `/assets/<name>?v=<hash>`.
+ *
+ * Filenames are stable across builds, so without this a cache holds `app.css` and keeps serving
+ * yesterday's bytes under today's name — the failure this pairs with `immutable` in routes.ts to
+ * make impossible. The hash is per file rather than one build-wide stamp, so rebuilding only
+ * invalidates what actually changed instead of every asset on every restart.
+ *
+ * Names with no stamp are left alone, which is what keeps the manifest's own icon URLs (rewritten
+ * nowhere, since the manifest is copied verbatim) from being silently half-processed: they stay
+ * unversioned, and routes.ts serves unversioned URLs as `no-cache`. PWA icons change about never,
+ * so the tradeoff is one revalidation against threading the rewrite through a second file format.
+ */
+function stampAssetUrls(html: string, versions: Map<string, string>): string {
+  return html.replace(/\/assets\/([\w.-]+)/g, (url, name: string) => {
+    const version = versions.get(name);
+    return version ? `${url}?v=${version}` : url;
+  });
+}
 
 /**
  * Bundles the four web entrypoints (one per `PageName`) with `Bun.build` and reads their static
@@ -40,13 +89,20 @@ export async function buildPages(webDir: string, outDir: string): Promise<PageAs
   if (!result.success) {
     throw new Error(`page bundling failed: ${result.logs.map(String).join("\n")}`);
   }
-  copyFileSync(join(webDir, "shared", "app.css"), join(outDir, "app.css"));
+  for (const name of STATIC_ASSETS) {
+    copyFileSync(join(webDir, "assets", name), join(outDir, name));
+  }
 
+  // Hashed after every file is in place, so the stamps describe what is actually being served.
+  const versions = new Map([...ASSET_WHITELIST].map((n) => [n, versionOf(join(outDir, n))]));
+
+  const shell = (...path: string[]) =>
+    stampAssetUrls(readFileSync(join(webDir, ...path), "utf8"), versions);
   const htmlByPage: Record<PageName, string> = {
-    login: readFileSync(join(webDir, "index.html"), "utf8"),
-    camera: readFileSync(join(webDir, "camera", "index.html"), "utf8"),
-    control: readFileSync(join(webDir, "control", "index.html"), "utf8"),
-    clips: readFileSync(join(webDir, "clips", "index.html"), "utf8"),
+    login: shell("index.html"),
+    camera: shell("camera", "index.html"),
+    control: shell("control", "index.html"),
+    clips: shell("clips", "index.html"),
   };
   return {
     html: (page) => htmlByPage[page],

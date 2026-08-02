@@ -491,4 +491,16 @@ $("cam-record").onclick = async () => {
   }
 };
 
+// Guard on the back link, but only once filming has started: leaving then drops this angle from
+// the hub and costs a full re-setup — name, camera permission, buffer warm-up — which is a lot to
+// lose to a stray tap mid-game. Before that, `#setup` has nothing worth confirming.
+$("back").onclick = (ev) => {
+  if ($("live").hidden) return;
+  if (
+    !window.confirm("Sair da câmera? Este ângulo sai do sistema e precisa ser configurado de novo.")
+  ) {
+    ev.preventDefault();
+  }
+};
+
 $<HTMLInputElement>("angle-name").value = localStorage.getItem("angleName") ?? "";

@@ -42,6 +42,41 @@ describe("routes", () => {
     expect((await fetch(`${base}/assets/camera.js`)).status).toBe(200);
   });
 
+  // The stamped URL is the only one the markup ever emits, so it is the one that must be safe to
+  // pin. `immutable` is only defensible because the hash changes with the bytes: a new build is a
+  // new URL, leaving no reachable path to a stale response.
+  it("pins versioned asset URLs for a year", async () => {
+    const res = await fetch(`${base}/assets/app.css?v=deadbeef`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("cache-control")).toBe("public, max-age=31536000, immutable");
+    expect((await res.text()).length).toBeGreaterThan(0);
+  });
+
+  // Regression guard: reaching a bare /assets/app.css means something bypassed the stamped markup,
+  // and those are exactly the requests that must not be pinned. Behind Cloudflare the unversioned
+  // path bit for real — with no Cache-Control from here it applied its own 4h TTL.
+  it("marks assets no-cache and answers a matching If-None-Match with 304", async () => {
+    const res = await fetch(`${base}/assets/app.css`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("cache-control")).toBe("no-cache");
+    expect(res.headers.get("content-type")).toBe("text/css");
+    const etag = res.headers.get("etag");
+    expect(etag).toBeTruthy();
+
+    const revalidated = await fetch(`${base}/assets/app.css`, {
+      headers: { "if-none-match": etag! },
+    });
+    expect(revalidated.status).toBe(304);
+    expect(await revalidated.text()).toBe("");
+
+    // A stale validator must NOT short-circuit — that would be the very bug this guards against.
+    const stale = await fetch(`${base}/assets/app.css`, {
+      headers: { "if-none-match": 'W/"0-0"' },
+    });
+    expect(stale.status).toBe(200);
+    expect((await stale.text()).length).toBeGreaterThan(0);
+  });
+
   it("serves the control and clips pages once authed (otherwise the e2e-only Playwright specs are the only thing that ever fetches them)", async () => {
     const guardedControl = await fetch(`${base}/control`, { redirect: "manual" });
     expect(guardedControl.status).toBe(302);

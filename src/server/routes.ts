@@ -40,6 +40,17 @@ export type AppContext = {
 
 const CLIP_DURATION_OPTIONS = [10, 20, 30, 45, 60];
 
+// Content types for `/assets/:name`. Only extensions that pages.ts's allowlist can actually yield
+// need an entry; the fallback exists so a future asset added there without a mapping still gets
+// served (as a download) rather than mislabelled as one of the types below.
+const ASSET_CONTENT_TYPES: Record<string, string> = {
+  css: "text/css",
+  js: "application/javascript",
+  svg: "image/svg+xml",
+  png: "image/png",
+  webmanifest: "application/manifest+json",
+};
+
 const json = (data: unknown, status = 200, headers: Record<string, string> = {}) =>
   new Response(JSON.stringify(data), {
     status,
@@ -92,12 +103,38 @@ export function createApp(ctx: AppContext) {
     "/control": pageRoute("control"),
     "/clips": pageRoute("clips"),
 
+    // Two caching policies, picked by whether the URL carries pages.ts's `?v=<content hash>`.
+    //
+    // Versioned: cache hard and never revalidate. The hash changes whenever the bytes do, so a new
+    // build is a new URL and a stale response under the old one can no longer be reached — which is
+    // what makes a year-long `immutable` safe rather than reckless.
+    //
+    // Unversioned: `no-cache` — storing is fine, reuse without revalidating is not. Reaching a bare
+    // `/assets/app.css` means something bypassed the stamped markup (a hand-typed URL, a bookmark,
+    // page HTML older than the current build), and those are exactly the cases that must not be
+    // pinned for a year. Sending no header at all is not an option either: Cloudflare caches
+    // `.css`/`.js`/`.png` by extension and applies its own default TTL when the origin stays quiet.
     "/assets/:name": {
       GET: (req: BunRequest<"/assets/:name">) => {
-        const file = ctx.pages.assetFile(req.params.name);
-        if (!file) return json({ error: "not found" }, 404);
-        const type = file.endsWith(".css") ? "text/css" : "application/javascript";
-        return new Response(Bun.file(file), { headers: { "content-type": type } });
+        const path = ctx.pages.assetFile(req.params.name);
+        if (!path) return json({ error: "not found" }, 404);
+        const ext = req.params.name.split(".").pop() ?? "";
+        const type = ASSET_CONTENT_TYPES[ext] ?? "application/octet-stream";
+        const file = Bun.file(path);
+        // Weak validator: size + mtime, not a content hash — it only has to change whenever the
+        // bytes might have. It carries the unversioned path, where revalidation is the norm; on the
+        // versioned path it is simply unused, since nothing revalidates an immutable response.
+        const etag = `W/"${file.size}-${file.lastModified}"`;
+        const versioned = new URL(req.url).searchParams.has("v");
+        const headers = {
+          "content-type": type,
+          "cache-control": versioned ? "public, max-age=31536000, immutable" : "no-cache",
+          etag,
+        };
+        if (req.headers.get("if-none-match") === etag) {
+          return new Response(null, { status: 304, headers });
+        }
+        return new Response(file, { headers });
       },
     },
 

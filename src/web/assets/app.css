@@ -102,6 +102,76 @@ h1 {
   color: var(--color-info);
 }
 
+/* ---------- Brand ---------- */
+
+/* Login page header: the horizontal brand lockup — mark, then "Local" in muted regular and
+ * "Replay" in bold. `align-self` is what centers it: `.page` is a flex column, whose default
+ * `stretch` would otherwise leave the shrink-to-fit contents against the column's left edge.
+ * Sizing hangs off this one `font-size` — the mark is sized in `em`, so both scale together. */
+.brand {
+  align-self: center;
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  padding-top: var(--space-4);
+  font-size: clamp(1.5rem, 6vw, 2.1rem);
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+.brand-mark {
+  width: 1.5em;
+  height: 1.5em;
+  flex-shrink: 0;
+  /* The mark's arc and arrowhead paint with `currentColor`; the wordmark's "Local" half is muted,
+   * so the mark sets its own full-strength color rather than inheriting it. */
+  color: var(--color-text);
+}
+.brand strong {
+  font-weight: 800;
+  color: var(--color-text);
+}
+
+/* Back to the role picker at "/". Shares the heading's line rather than taking a row of its own,
+ * and the negative margin pulls the arrow out to the page's left edge so only the title reads as
+ * indented — the touch target is much wider than the glyph inside it. */
+.page-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+.back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  /* Matches the 2.75rem minimum the inputs and buttons use, so it stays thumb-sized on a phone
+   * even though the arrow itself is small. */
+  width: 2.75rem;
+  height: 2.75rem;
+  margin-left: -0.7rem;
+  border-radius: var(--radius-pill);
+  color: var(--color-text-muted);
+  text-decoration: none;
+  font-size: 1.4rem;
+  line-height: 1;
+}
+.back:hover {
+  background: var(--color-surface-2);
+  color: var(--color-text);
+}
+
+/* The app mark opening each internal page's <h1>, where a role emoji used to be. Sized in `em` so
+ * it tracks the clamp()ed heading size, with a baseline nudge so it sits like the emoji did. */
+.h1-mark {
+  width: 1.15em;
+  height: 1.15em;
+  vertical-align: -0.22em;
+  margin-right: 0.15em;
+}
+
 /* ---------- Layout ---------- */
 
 .page {

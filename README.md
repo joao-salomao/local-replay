@@ -1,4 +1,10 @@
-# Local Replay
+<h1 align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/lockup-readme-dark.png">
+    <img src="assets/lockup-readme-light.png" width="720"
+         alt="Local Replay — instant replay na quadra: os celulares viram câmeras, alguém aperta GRAVAR">
+  </picture>
+</h1>
 
 A local sports instant-replay system for personal (hobby) use on a court: ordinary phones become
 cameras connected to a server on the local network. After a play happens, anyone presses

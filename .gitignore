@@ -13,3 +13,4 @@ data/*
 /blob-report/
 dist/
 docs/
+start-cloudflare-tunnel.sh
