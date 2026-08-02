@@ -7,10 +7,31 @@ export type PageAssets = {
   assetFile(name: string): string | null;
 };
 
+// Brand files (favicon set, PWA icons/manifest, the header logo) served verbatim from
+// `web/assets`. Copied rather than bundled — nothing imports them, they're referenced by URL from
+// the HTML shells and from the manifest.
+const BRAND_ASSETS = [
+  "favicon.svg",
+  "favicon-16.png",
+  "favicon-32.png",
+  "apple-touch-icon.png",
+  "icon-192.png",
+  "icon-512.png",
+  "icon-maskable-512.png",
+  "manifest.webmanifest",
+];
+
 // Explicit allowlist of servable built filenames. `assetFile` is reachable via routes.ts's
 // `/assets/:name` with a user-supplied `:name` — an allowlist is a simpler, stronger guard than
 // trying to path-traversal-proof an arbitrary filename, and is checked independently of it.
-const ASSET_WHITELIST = new Set(["login.js", "camera.js", "control.js", "clips.js", "app.css"]);
+const ASSET_WHITELIST = new Set([
+  "login.js",
+  "camera.js",
+  "control.js",
+  "clips.js",
+  "app.css",
+  ...BRAND_ASSETS,
+]);
 
 /**
  * Bundles the four web entrypoints (one per `PageName`) with `Bun.build` and reads their static
@@ -41,6 +62,9 @@ export async function buildPages(webDir: string, outDir: string): Promise<PageAs
     throw new Error(`page bundling failed: ${result.logs.map(String).join("\n")}`);
   }
   copyFileSync(join(webDir, "shared", "app.css"), join(outDir, "app.css"));
+  for (const name of BRAND_ASSETS) {
+    copyFileSync(join(webDir, "assets", name), join(outDir, name));
+  }
 
   const htmlByPage: Record<PageName, string> = {
     login: readFileSync(join(webDir, "index.html"), "utf8"),

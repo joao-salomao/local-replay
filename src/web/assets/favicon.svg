@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100" role="img" aria-label="Local Replay">
+  <rect width="100" height="100" rx="20" fill="#161826"></rect>
+  <g transform="translate(50 50) scale(.72) translate(-50 -50)">
+    <path d="M17.55 38.89A35 35 0 1 0 50 17" fill="none" stroke="#E9E9ED" stroke-width="18"></path>
+  <path d="M50 2L50 32L27 17Z" fill="#E9E9ED"></path>
+  <circle cx="50" cy="52" r="12" fill="#9184D9"></circle>
+  </g>
+</svg>

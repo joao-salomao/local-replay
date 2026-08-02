@@ -40,6 +40,17 @@ export type AppContext = {
 
 const CLIP_DURATION_OPTIONS = [10, 20, 30, 45, 60];
 
+// Content types for `/assets/:name`. Only extensions that pages.ts's allowlist can actually yield
+// need an entry; the fallback exists so a future asset added there without a mapping still gets
+// served (as a download) rather than mislabelled as one of the types below.
+const ASSET_CONTENT_TYPES: Record<string, string> = {
+  css: "text/css",
+  js: "application/javascript",
+  svg: "image/svg+xml",
+  png: "image/png",
+  webmanifest: "application/manifest+json",
+};
+
 const json = (data: unknown, status = 200, headers: Record<string, string> = {}) =>
   new Response(JSON.stringify(data), {
     status,
@@ -96,7 +107,8 @@ export function createApp(ctx: AppContext) {
       GET: (req: BunRequest<"/assets/:name">) => {
         const file = ctx.pages.assetFile(req.params.name);
         if (!file) return json({ error: "not found" }, 404);
-        const type = file.endsWith(".css") ? "text/css" : "application/javascript";
+        const ext = req.params.name.split(".").pop() ?? "";
+        const type = ASSET_CONTENT_TYPES[ext] ?? "application/octet-stream";
         return new Response(Bun.file(file), { headers: { "content-type": type } });
       },
     },

@@ -4,11 +4,29 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Local Replay</title>
+  <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
+  <link rel="icon" href="/assets/favicon-32.png" sizes="32x32" type="image/png" />
+  <link rel="icon" href="/assets/favicon-16.png" sizes="16x16" type="image/png" />
+  <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
+  <link rel="manifest" href="/assets/manifest.webmanifest" />
+  <meta name="theme-color" content="#0d1117" />
   <link rel="stylesheet" href="/assets/app.css" />
 </head>
 <body>
   <div class="page">
-    <h1>🏐 Local Replay</h1>
+    <!-- Brand lockup. The mark is inlined rather than <img src="logo-mark.svg"> because it paints
+         with `currentColor`, and an SVG loaded through <img> is an isolated document that can't see
+         this page's color — it would render black on black. `aria-hidden` because the wordmark
+         beside it already names the app. The casing lives in CSS (`text-transform`), not in the
+         markup, so screen readers get "Local Replay" instead of spelling out two acronyms. -->
+    <h1 class="brand">
+      <svg class="brand-mark" viewBox="0 0 100 100" aria-hidden="true">
+        <path d="M18.48 39.26A34 34 0 1 0 50 18" fill="none" stroke="currentColor" stroke-width="16" />
+        <path d="M50 4L50 32L28 18Z" fill="currentColor" />
+        <circle cx="50" cy="52" r="14" fill="#9184D9" />
+      </svg>
+      <span>Local <strong>Replay</strong></span>
+    </h1>
     <div class="card" id="login-card">
       <form id="login-form">
         <input id="password" type="password" placeholder="Senha" autocomplete="current-password" required />

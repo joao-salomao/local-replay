@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildPages } from "@server/pages";
@@ -15,6 +15,26 @@ describe("buildPages", () => {
     }
     expect(pages.assetFile("../secret")).toBeNull();
     expect(pages.assetFile("evil.js")).toBeNull();
+  }, 30_000);
+
+  it("copies the brand assets into the out dir and whitelists them", async () => {
+    const out = mkdtempSync(join(tmpdir(), "replay-dist-brand-"));
+    const pages = await buildPages("src/web", out);
+    for (const name of [
+      "favicon.svg",
+      "favicon-16.png",
+      "favicon-32.png",
+      "apple-touch-icon.png",
+      "icon-192.png",
+      "icon-512.png",
+      "icon-maskable-512.png",
+      "manifest.webmanifest",
+    ]) {
+      // Both halves matter: the whitelist is what lets `/assets/:name` resolve the name at all,
+      // and the copy is what puts a readable file behind it. Missing either one is a 404/500.
+      expect(pages.assetFile(name)).not.toBeNull();
+      expect(existsSync(join(out, name))).toBe(true);
+    }
   }, 30_000);
 
   it("throws when Bun.build fails to bundle an entrypoint", async () => {
