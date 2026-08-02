@@ -37,6 +37,19 @@ describe("buildPages", () => {
     }
   }, 30_000);
 
+  it("gives every role page a link back to the role picker", async () => {
+    const out = mkdtempSync(join(tmpdir(), "replay-dist-back-"));
+    const pages = await buildPages("src/web", out);
+    // The role pages are reached by assignment to location.href, never as a nested route, so the
+    // browser's own back affordance is the only other way out — and there isn't one in a
+    // standalone/home-screen launch. Losing this link strands the operator on the page.
+    for (const page of ["camera", "control", "clips"] as const) {
+      expect(pages.html(page)).toContain('class="back"');
+      expect(pages.html(page)).toContain('href="/"');
+    }
+    expect(pages.html("login")).not.toContain('class="back"');
+  }, 30_000);
+
   it("throws when Bun.build fails to bundle an entrypoint", async () => {
     // A webDir with all four required entrypoints present (so entry *resolution* succeeds) but
     // one entrypoint importing a module that doesn't exist, so Bun.build itself returns
