@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "bun run src/server/index.ts",
+    "dev": "bun --hot run src/server/index.ts",
     "start": "bun run src/server/index.ts",
     "test": "LOG_LEVEL=silent bun test tests/unit tests/integration",
     "test:coverage": "LOG_LEVEL=silent bun test tests/unit tests/integration --coverage",
