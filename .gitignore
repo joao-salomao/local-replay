@@ -13,5 +13,4 @@ data/*
 /blob-report/
 dist/
 docs/
-# Local operator script: holds a cloudflared tunnel token in plaintext.
 start-cloudflare-tunnel.sh

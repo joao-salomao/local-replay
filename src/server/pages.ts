@@ -8,10 +8,13 @@ export type PageAssets = {
   assetFile(name: string): string | null;
 };
 
-// Brand files (favicon set, PWA icons/manifest, the header logo) served verbatim from
-// `web/assets`. Copied rather than bundled — nothing imports them, they're referenced by URL from
-// the HTML shells and from the manifest.
-const BRAND_ASSETS = [
+// Everything under `web/assets` — the stylesheet, the favicon set, the PWA icons and manifest.
+// Copied rather than bundled: nothing imports these, they're referenced by URL from the HTML
+// shells and from the manifest. That is what the directory means, and the split against
+// `web/shared` is what keeps this list honest — `shared` holds modules the pages import, `assets`
+// holds files served verbatim, so a file's location tells you how it reaches the browser.
+const STATIC_ASSETS = [
+  "app.css",
   "favicon.svg",
   "favicon-16.png",
   "favicon-32.png",
@@ -30,8 +33,7 @@ const ASSET_WHITELIST = new Set([
   "camera.js",
   "control.js",
   "clips.js",
-  "app.css",
-  ...BRAND_ASSETS,
+  ...STATIC_ASSETS,
 ]);
 
 /** Content hash, short enough to keep URLs readable — this only has to change when bytes do, so
@@ -87,8 +89,7 @@ export async function buildPages(webDir: string, outDir: string): Promise<PageAs
   if (!result.success) {
     throw new Error(`page bundling failed: ${result.logs.map(String).join("\n")}`);
   }
-  copyFileSync(join(webDir, "shared", "app.css"), join(outDir, "app.css"));
-  for (const name of BRAND_ASSETS) {
+  for (const name of STATIC_ASSETS) {
     copyFileSync(join(webDir, "assets", name), join(outDir, name));
   }
 
