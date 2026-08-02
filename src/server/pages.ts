@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { copyFileSync, mkdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
@@ -33,6 +34,31 @@ const ASSET_WHITELIST = new Set([
   ...BRAND_ASSETS,
 ]);
 
+/** Content hash, short enough to keep URLs readable — this only has to change when bytes do, so
+ * it needs no cryptographic strength and no collision headroom beyond a build's handful of files. */
+const versionOf = (path: string) =>
+  createHash("sha1").update(readFileSync(path)).digest("hex").slice(0, 8);
+
+/**
+ * Rewrites every `/assets/<name>` URL in `html` to `/assets/<name>?v=<hash>`.
+ *
+ * Filenames are stable across builds, so without this a cache holds `app.css` and keeps serving
+ * yesterday's bytes under today's name — the failure this pairs with `immutable` in routes.ts to
+ * make impossible. The hash is per file rather than one build-wide stamp, so rebuilding only
+ * invalidates what actually changed instead of every asset on every restart.
+ *
+ * Names with no stamp are left alone, which is what keeps the manifest's own icon URLs (rewritten
+ * nowhere, since the manifest is copied verbatim) from being silently half-processed: they stay
+ * unversioned, and routes.ts serves unversioned URLs as `no-cache`. PWA icons change about never,
+ * so the tradeoff is one revalidation against threading the rewrite through a second file format.
+ */
+function stampAssetUrls(html: string, versions: Map<string, string>): string {
+  return html.replace(/\/assets\/([\w.-]+)/g, (url, name: string) => {
+    const version = versions.get(name);
+    return version ? `${url}?v=${version}` : url;
+  });
+}
+
 /**
  * Bundles the four web entrypoints (one per `PageName`) with `Bun.build` and reads their static
  * HTML shells, returning an in-memory accessor `routes.ts` uses to serve pages/assets without
@@ -66,11 +92,16 @@ export async function buildPages(webDir: string, outDir: string): Promise<PageAs
     copyFileSync(join(webDir, "assets", name), join(outDir, name));
   }
 
+  // Hashed after every file is in place, so the stamps describe what is actually being served.
+  const versions = new Map([...ASSET_WHITELIST].map((n) => [n, versionOf(join(outDir, n))]));
+
+  const shell = (...path: string[]) =>
+    stampAssetUrls(readFileSync(join(webDir, ...path), "utf8"), versions);
   const htmlByPage: Record<PageName, string> = {
-    login: readFileSync(join(webDir, "index.html"), "utf8"),
-    camera: readFileSync(join(webDir, "camera", "index.html"), "utf8"),
-    control: readFileSync(join(webDir, "control", "index.html"), "utf8"),
-    clips: readFileSync(join(webDir, "clips", "index.html"), "utf8"),
+    login: shell("index.html"),
+    camera: shell("camera", "index.html"),
+    control: shell("control", "index.html"),
+    clips: shell("clips", "index.html"),
   };
   return {
     html: (page) => htmlByPage[page],

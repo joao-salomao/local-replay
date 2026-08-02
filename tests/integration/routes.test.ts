@@ -42,9 +42,19 @@ describe("routes", () => {
     expect((await fetch(`${base}/assets/camera.js`)).status).toBe(200);
   });
 
-  // Regression guard: asset names carry no content hash, so a cached copy that outlives a deploy
-  // is served under the same name — new HTML against an old stylesheet. Behind Cloudflare that bit
-  // for real: with no Cache-Control from here it applied its own 4h TTL to app.css.
+  // The stamped URL is the only one the markup ever emits, so it is the one that must be safe to
+  // pin. `immutable` is only defensible because the hash changes with the bytes: a new build is a
+  // new URL, leaving no reachable path to a stale response.
+  it("pins versioned asset URLs for a year", async () => {
+    const res = await fetch(`${base}/assets/app.css?v=deadbeef`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("cache-control")).toBe("public, max-age=31536000, immutable");
+    expect((await res.text()).length).toBeGreaterThan(0);
+  });
+
+  // Regression guard: reaching a bare /assets/app.css means something bypassed the stamped markup,
+  // and those are exactly the requests that must not be pinned. Behind Cloudflare the unversioned
+  // path bit for real — with no Cache-Control from here it applied its own 4h TTL.
   it("marks assets no-cache and answers a matching If-None-Match with 304", async () => {
     const res = await fetch(`${base}/assets/app.css`);
     expect(res.status).toBe(200);

@@ -103,13 +103,17 @@ export function createApp(ctx: AppContext) {
     "/control": pageRoute("control"),
     "/clips": pageRoute("clips"),
 
-    // Asset filenames are stable across deploys (no content hash), so a cache that outlives a
-    // deploy serves the OLD file under the SAME name — and since page HTML is never cached, the
-    // result is new markup against a stale stylesheet/bundle. `no-cache` is what prevents that: it
-    // does not forbid storing, it forbids reuse without revalidating first. It matters twice over
-    // behind a proxy — Cloudflare caches `.css`/`.js`/`.png` by extension and, absent any
-    // `Cache-Control` from here, stamps on its own default TTL, so silence is not a neutral choice.
-    // The ETag is what keeps revalidation cheap: unchanged files come back as an empty 304.
+    // Two caching policies, picked by whether the URL carries pages.ts's `?v=<content hash>`.
+    //
+    // Versioned: cache hard and never revalidate. The hash changes whenever the bytes do, so a new
+    // build is a new URL and a stale response under the old one can no longer be reached — which is
+    // what makes a year-long `immutable` safe rather than reckless.
+    //
+    // Unversioned: `no-cache` — storing is fine, reuse without revalidating is not. Reaching a bare
+    // `/assets/app.css` means something bypassed the stamped markup (a hand-typed URL, a bookmark,
+    // page HTML older than the current build), and those are exactly the cases that must not be
+    // pinned for a year. Sending no header at all is not an option either: Cloudflare caches
+    // `.css`/`.js`/`.png` by extension and applies its own default TTL when the origin stays quiet.
     "/assets/:name": {
       GET: (req: BunRequest<"/assets/:name">) => {
         const path = ctx.pages.assetFile(req.params.name);
@@ -118,11 +122,15 @@ export function createApp(ctx: AppContext) {
         const type = ASSET_CONTENT_TYPES[ext] ?? "application/octet-stream";
         const file = Bun.file(path);
         // Weak validator: size + mtime, not a content hash — it only has to change whenever the
-        // bytes might have. Rebuilding at boot rewrites mtime, so a restart re-sends the body even
-        // for identical content. That costs one transfer of a handful of small files, which is the
-        // cheap side of the trade against ever serving a stale bundle.
+        // bytes might have. It carries the unversioned path, where revalidation is the norm; on the
+        // versioned path it is simply unused, since nothing revalidates an immutable response.
         const etag = `W/"${file.size}-${file.lastModified}"`;
-        const headers = { "content-type": type, "cache-control": "no-cache", etag };
+        const versioned = new URL(req.url).searchParams.has("v");
+        const headers = {
+          "content-type": type,
+          "cache-control": versioned ? "public, max-age=31536000, immutable" : "no-cache",
+          etag,
+        };
         if (req.headers.get("if-none-match") === etag) {
           return new Response(null, { status: 304, headers });
         }
