@@ -42,6 +42,31 @@ describe("routes", () => {
     expect((await fetch(`${base}/assets/camera.js`)).status).toBe(200);
   });
 
+  // Regression guard: asset names carry no content hash, so a cached copy that outlives a deploy
+  // is served under the same name — new HTML against an old stylesheet. Behind Cloudflare that bit
+  // for real: with no Cache-Control from here it applied its own 4h TTL to app.css.
+  it("marks assets no-cache and answers a matching If-None-Match with 304", async () => {
+    const res = await fetch(`${base}/assets/app.css`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("cache-control")).toBe("no-cache");
+    expect(res.headers.get("content-type")).toBe("text/css");
+    const etag = res.headers.get("etag");
+    expect(etag).toBeTruthy();
+
+    const revalidated = await fetch(`${base}/assets/app.css`, {
+      headers: { "if-none-match": etag! },
+    });
+    expect(revalidated.status).toBe(304);
+    expect(await revalidated.text()).toBe("");
+
+    // A stale validator must NOT short-circuit — that would be the very bug this guards against.
+    const stale = await fetch(`${base}/assets/app.css`, {
+      headers: { "if-none-match": 'W/"0-0"' },
+    });
+    expect(stale.status).toBe(200);
+    expect((await stale.text()).length).toBeGreaterThan(0);
+  });
+
   it("serves the control and clips pages once authed (otherwise the e2e-only Playwright specs are the only thing that ever fetches them)", async () => {
     const guardedControl = await fetch(`${base}/control`, { redirect: "manual" });
     expect(guardedControl.status).toBe(302);

@@ -103,13 +103,30 @@ export function createApp(ctx: AppContext) {
     "/control": pageRoute("control"),
     "/clips": pageRoute("clips"),
 
+    // Asset filenames are stable across deploys (no content hash), so a cache that outlives a
+    // deploy serves the OLD file under the SAME name — and since page HTML is never cached, the
+    // result is new markup against a stale stylesheet/bundle. `no-cache` is what prevents that: it
+    // does not forbid storing, it forbids reuse without revalidating first. It matters twice over
+    // behind a proxy — Cloudflare caches `.css`/`.js`/`.png` by extension and, absent any
+    // `Cache-Control` from here, stamps on its own default TTL, so silence is not a neutral choice.
+    // The ETag is what keeps revalidation cheap: unchanged files come back as an empty 304.
     "/assets/:name": {
       GET: (req: BunRequest<"/assets/:name">) => {
-        const file = ctx.pages.assetFile(req.params.name);
-        if (!file) return json({ error: "not found" }, 404);
+        const path = ctx.pages.assetFile(req.params.name);
+        if (!path) return json({ error: "not found" }, 404);
         const ext = req.params.name.split(".").pop() ?? "";
         const type = ASSET_CONTENT_TYPES[ext] ?? "application/octet-stream";
-        return new Response(Bun.file(file), { headers: { "content-type": type } });
+        const file = Bun.file(path);
+        // Weak validator: size + mtime, not a content hash — it only has to change whenever the
+        // bytes might have. Rebuilding at boot rewrites mtime, so a restart re-sends the body even
+        // for identical content. That costs one transfer of a handful of small files, which is the
+        // cheap side of the trade against ever serving a stale bundle.
+        const etag = `W/"${file.size}-${file.lastModified}"`;
+        const headers = { "content-type": type, "cache-control": "no-cache", etag };
+        if (req.headers.get("if-none-match") === etag) {
+          return new Response(null, { status: 304, headers });
+        }
+        return new Response(file, { headers });
       },
     },
 
